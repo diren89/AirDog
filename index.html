@@ -94,12 +94,12 @@ function viewHeute(){
       </div>
       <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start;margin-top:14px">
         <div>
-          <div style="display:flex;align-items:center;gap:4px;color:#5c4a2e;font:600 14px Outfit"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">location_on</span>Leipzig · Connewitz</div>
+          <div style="display:flex;align-items:center;gap:4px;color:#5c4a2e;font:600 14px Outfit"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">location_on</span>Freiburg i. Br.</div>
           <div style="color:#8a6b3e;font:400 12.5px Outfit;margin-top:2px">Freitag, 26. Juni</div>
         </div>
         <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.55);border-radius:22px;padding:4px 11px 4px 5px">
           <div class="ms" style="width:26px;height:26px;border-radius:50%;background:#c0673c;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-variation-settings:'FILL' 1">pets</div>
-          <span style="font:600 12.5px Outfit;color:#5c4a2e">Rex</span>
+          <span style="font:600 12.5px Outfit;color:#5c4a2e">Charlie</span>
         </div>
       </div>
       <div style="position:relative;display:flex;align-items:flex-end;gap:14px;margin-top:20px">
@@ -152,7 +152,7 @@ function viewHeute(){
         <div style="display:flex;align-items:center;gap:12px">
           <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#f7e6da;display:flex;align-items:center;justify-content:center;color:#c0673c;font-size:23px">pets</div>
           <div style="flex:1">
-            <div style="font:600 15px Outfit;color:#23303d">Rex · Gassi-Ampel</div>
+            <div style="font:600 15px Outfit;color:#23303d">Charlie · Gassi-Ampel</div>
             <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">Asphalt ~42° · zu heiß für Pfoten</div>
           </div>
           <div style="width:13px;height:13px;border-radius:50%;background:#d8543f;animation:pulse 1.8s ease infinite"></div>
@@ -197,8 +197,8 @@ const RAW_DAY = [
   { id:'morg', kind:'open',  st:'past', t:'05:30 – 07:30', title:'Morgenlüften', sub:'Kühle Nachtluft · 17° außen', detail:'Stoß- oder Querlüften für 20–30 Min. Holt die letzte kühle Luft rein, bevor die Sonne kommt.' },
   { id:'zu',   kind:'close', st:'past', t:'ab 08:00', title:'Fenster zu & abdunkeln', sub:'Süd & West · Rollos runter', detail:'Die Sonne trifft jetzt Süd- und Westfenster. Geschlossen & abgedunkelt bleibt die Wohnung bis zu 4° kühler.' },
   { id:'now',  kind:'heat',  st:'now', t:'jetzt · 14:00', title:'Hitze draußen halten', sub:'28° außen · 24° innen', detail:'Außen wärmer als innen — jedes offene Fenster heizt auf. Alles zu, Rollos unten. Nächstes Lüften ab 21:30.' },
-  { id:'g1',   kind:'dog',   st:'next', t:'18:00', title:'Gassi noch zu heiß', sub:'Asphalt ~42° · Pfoten-Risiko', detail:'7-Sekunden-Regel: Handrücken 7 Sek auf den Asphalt. Zu heiß für dich = zu heiß für Rex. Lieber Schatten & kurz.' },
-  { id:'g2',   kind:'dogGood', st:'upcoming', t:'ab 20:30', title:'Gute Gassi-Zeit', sub:'Abkühlung · Pfoten safe', detail:'Asphalt unter 30°, angenehme 23°. Ideal für die große Runde mit Rex.' },
+  { id:'g1',   kind:'dog',   st:'next', t:'18:00', title:'Gassi noch zu heiß', sub:'Asphalt ~42° · Pfoten-Risiko', detail:'7-Sekunden-Regel: Handrücken 7 Sek auf den Asphalt. Zu heiß für dich = zu heiß für Charlie. Lieber Schatten & kurz.' },
+  { id:'g2',   kind:'dogGood', st:'upcoming', t:'ab 20:30', title:'Gute Gassi-Zeit', sub:'Abkühlung · Pfoten safe', detail:'Asphalt unter 30°, angenehme 23°. Ideal für die große Runde mit Charlie.' },
   { id:'luft', kind:'open',  st:'upcoming', t:'21:30 – 05:00', title:'Großes Lüften', sub:'Außen 19° < innen 24°', detail:'Jetzt kühlt die Außenluft effektiv runter. Querlüften über Nacht bringt bis zu 5° Abkühlung für morgen.' }
 ];
 
@@ -256,7 +256,7 @@ function viewHund(){
     <div style="padding:14px 18px 0;display:flex;align-items:center;gap:11px">
       <div class="ms" style="width:44px;height:44px;border-radius:50%;background:#c0673c;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-variation-settings:'FILL' 1">pets</div>
       <div>
-        <div style="font:600 24px Outfit;color:#23303d;line-height:1.05">Rex</div>
+        <div style="font:600 24px Outfit;color:#23303d;line-height:1.05">Charlie</div>
         <div style="font:400 12.5px Outfit;color:#7d8995">Labrador · 4 Jahre · Hitze-empfindlich</div>
       </div>
     </div>
@@ -285,7 +285,7 @@ function viewHund(){
         <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#fbecd6;display:flex;align-items:center;justify-content:center;color:#d98a2b;font-size:22px">device_thermostat</div>
         <div style="flex:1">
           <div style="font:600 14px Outfit;color:#26333f">7-Sekunden-Pfotentest</div>
-          <div style="font:400 12.5px/1.45 Outfit;color:#7d8995;margin-top:3px">Halt deinen Handrücken 7 Sekunden auf den Asphalt. Zu heiß für dich = zu heiß für Rex' Pfoten. Jetzt: lieber Schatten & kurze Runden.</div>
+          <div style="font:400 12.5px/1.45 Outfit;color:#7d8995;margin-top:3px">Halt deinen Handrücken 7 Sekunden auf den Asphalt. Zu heiß für dich = zu heiß für Charlie' Pfoten. Jetzt: lieber Schatten & kurze Runden.</div>
         </div>
       </div>
 
@@ -415,7 +415,7 @@ function viewProfil(){
 
       ${affiliateSec}
 
-      <div style="text-align:center;font:400 11px Outfit;color:#b5bfc8;padding:4px 0 2px">AirDog · v1.0 · Standort: Leipzig</div>
+      <div style="text-align:center;font:400 11px Outfit;color:#b5bfc8;padding:4px 0 2px">AirDog · v1.0 · Standort: Freiburg i. Br.</div>
     </div>
   </div>`;
 }

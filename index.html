@@ -53,6 +53,14 @@ const state = {
   rainForecast: null,
 };
 
+// ---- pollen (static; ponytail: replace with API when source confirmed) ----
+const POLLEN = [
+  { name:'Gräser', label:'Hoch',    color:'#d8543f', width:'92%' },
+  { name:'Beifuß', label:'Mittel',  color:'#d98a2b', width:'58%' },
+  { name:'Birke',  label:'Niedrig', color:'#4a9d6e', width:'24%' }
+];
+const POLLEN_BADGE = { bg:'#fbecd6', color:'#c07d1d', level:'Mittel' };
+
 // ---- weather helpers ----
 const WMO = {
   0:'Sonnig',1:'Leicht bewölkt',2:'Bewölkt',3:'Bedeckt',
@@ -344,6 +352,33 @@ function viewHeute(){
       </div>
 
       ${rainCard}
+
+      <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 10px rgba(25,45,65,.05)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#eaf3e2;display:flex;align-items:center;justify-content:center;color:#6a9a3e;font-size:23px;font-variation-settings:'FILL' 1">filter_vintage</div>
+          <div style="flex:1">
+            <div style="font:600 15px Outfit;color:#23303d">Pollenbelastung</div>
+            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">Gräser-Hochsaison · Wert lokal gemessen</div>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:5px;background:${POLLEN_BADGE.bg};color:${POLLEN_BADGE.color};font:700 11px Outfit;padding:5px 10px;border-radius:20px">
+            <span style="width:7px;height:7px;border-radius:50%;background:${POLLEN_BADGE.color}"></span>${POLLEN_BADGE.level}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:11px;margin-top:15px">
+          ${POLLEN.map(p => `<div style="display:flex;align-items:center;gap:11px">
+            <span style="font:500 12.5px Outfit;color:#5b6772;width:64px;flex:none">${p.name}</span>
+            <div style="flex:1;height:7px;border-radius:5px;background:#eef1f4;overflow:hidden">
+              <div style="height:100%;width:${p.width};border-radius:5px;background:${p.color}"></div>
+            </div>
+            <span style="font:600 11.5px Outfit;color:${p.color};width:54px;text-align:right;flex:none">${p.label}</span>
+          </div>`).join('')}
+        </div>
+        <div style="background:#f4f8ef;border-radius:13px;padding:11px 12px;margin-top:14px;display:flex;align-items:flex-start;gap:9px">
+          <span class="ms" style="font-size:19px;color:#6a9a3e;margin-top:1px">air</span>
+          <span style="font:500 12px/1.45 Outfit;color:#566b3e">Bestes pollenarmes Lüften <b style="font-weight:700">nach 22:00</b> — abends fällt der Gräserpollen-Flug deutlich ab.</span>
+        </div>
+      </div>
+
       ${affiliateCard}
     </div>
   </div>`;

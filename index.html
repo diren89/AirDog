@@ -51,6 +51,7 @@ const state = {
   dogWalkAspTemp: null,
   dogWalkAirTemp: null,
   rainForecast: null,
+  locOpen: false,
   // pollen (live from air quality API)
   pollenData: [],
   pollenBadge: { bg:'#eef1f4', color:'#9aa6b2', level:'…' },
@@ -108,6 +109,14 @@ function uvLabel(uv){
   return 'extrem';
 }
 
+const CITIES = [
+  { name:'Freiburg i. Br.', region:'Baden-Württemberg',    lat:47.9959, lon:7.8494  },
+  { name:'Berlin',           region:'Berlin',               lat:52.5200, lon:13.4050 },
+  { name:'München',          region:'Bayern',               lat:48.1351, lon:11.5820 },
+  { name:'Hamburg',          region:'Hamburg',              lat:53.5753, lon:10.0153 },
+  { name:'Köln',             region:'Nordrhein-Westfalen',  lat:50.9333, lon:6.9500  }
+];
+
 function hhmm(date){ return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`; }
 function hh00(date){ return `${String(date.getHours()).padStart(2,'0')}:00`; }
 
@@ -121,25 +130,14 @@ function updateClock(){
   state.dateShort = `${shortDays[now.getDay()]}, ${now.getDate()}. ${months[now.getMonth()]}`;
 }
 
-async function fetchWeather(){
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(async pos => {
-      try {
-        const {latitude: lat, longitude: lon} = pos.coords;
-        const [wRes, gRes, aRes] = await Promise.all([
-          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,uv_index,relative_humidity_2m&hourly=temperature_2m,precipitation_probability&timezone=auto&forecast_days=2`),
-          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=de`),
-          fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=grass_pollen,mugwort_pollen,birch_pollen&timezone=auto&forecast_days=1`)
-        ]);
-        const w = await wRes.json();
-        const g = await gRes.json();
-        const a = await aRes.json();
-
-        // location
-        const addr = g.address || {};
-        const city = addr.city || addr.town || addr.village || '';
-        const district = addr.suburb || addr.neighbourhood || addr.quarter || '';
-        state.locationName = district ? `${city} · ${district}` : city;
+async function fetchWeatherForCoords(lat, lon, locName){
+  const [wRes, aRes] = await Promise.all([
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,uv_index,relative_humidity_2m&hourly=temperature_2m,precipitation_probability&timezone=auto&forecast_days=2`),
+    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=grass_pollen,mugwort_pollen,birch_pollen&timezone=auto&forecast_days=1`)
+  ]);
+  const w = await wRes.json();
+  const a = await aRes.json();
+  state.locationName = locName;
 
         // current
         const cur = w.current;
@@ -232,8 +230,21 @@ async function fetchWeather(){
           state.rainForecast = null;
         }
 
-        updateClock();
-        render();
+  updateClock();
+  render();
+}
+
+async function fetchWeather(){
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(async pos => {
+      try {
+        const {latitude: lat, longitude: lon} = pos.coords;
+        const gRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=de`);
+        const g = await gRes.json();
+        const addr = g.address || {};
+        const city = addr.city || addr.town || addr.village || '';
+        const district = addr.suburb || addr.neighbourhood || addr.quarter || '';
+        await fetchWeatherForCoords(lat, lon, district ? `${city} · ${district}` : city);
         resolve();
       } catch(e){ reject(e); }
     }, reject, { timeout: 10000 });
@@ -247,7 +258,11 @@ const A = {
   setDir(room, dir){ state.dirs = Object.assign({}, state.dirs, {[room]: dir}); render(); },
   tog(k){ state[k] = !state[k]; render(); },
   openPro(){ state.proOpen = true; render(); },
-  closePro(){ state.proOpen = false; render(); }
+  closePro(){ state.proOpen = false; render(); },
+  openLoc(){ state.locOpen = true; render(); },
+  closeLoc(){ state.locOpen = false; render(); },
+  pickCity(name, lat, lon){ state.locOpen = false; render(); fetchWeatherForCoords(lat, lon, name).catch(()=>{}); },
+  useGps(){ state.locOpen = false; render(); fetchWeather().catch(()=>{}); }
 };
 
 const sw = on => ({ track: on ? '#4a9d6e' : '#d4dae0', knob: on ? 'translateX(20px)' : 'translateX(2px)' });
@@ -330,7 +345,7 @@ function viewHeute(){
       </div>
       <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start;margin-top:14px">
         <div>
-          <div style="display:flex;align-items:center;gap:4px;color:#5c4a2e;font:600 14px Outfit"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">location_on</span>${state.locationName}</div>
+          <div onclick="A.openLoc()" style="display:inline-flex;align-items:center;gap:4px;color:#5c4a2e;font:600 14px Outfit;cursor:pointer;background:rgba(255,255,255,.4);border-radius:18px;padding:3px 9px 3px 6px"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">location_on</span>${state.locationName}<span class="ms" style="font-size:17px;color:#a07f4d">expand_more</span></div>
           <div style="color:#8a6b3e;font:400 12.5px Outfit;margin-top:2px">${state.dateStr}</div>
         </div>
         <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.55);border-radius:22px;padding:4px 11px 4px 5px">
@@ -757,6 +772,35 @@ function proSheet(){
     </div>`;
 }
 
+// ---------------- LOC SHEET ----------------
+function locSheet(){
+  if(!state.locOpen) return '';
+  const rows = CITIES.map(c => {
+    const active = state.locationName === c.name;
+    const check = active ? '<span class="ms" style="font-size:21px;color:#1f8fcf">check_circle</span>' : '';
+    return '<div onclick="A.pickCity(\'' + c.name + '\',' + c.lat + ',' + c.lon + ')" style="display:flex;align-items:center;gap:11px;padding:13px 4px;cursor:pointer;border-bottom:1px solid #f3f5f7"><span class="ms" style="font-size:20px;color:#93a0ac">location_on</span><div style="flex:1"><div style="font:600 14px Outfit;color:#26333f">' + c.name + '</div><div style="font:400 11.5px Outfit;color:#9aa6b2">' + c.region + '</div></div>' + check + '</div>';
+  }).join('');
+  return `
+    <div onclick="A.closeLoc()" style="position:absolute;inset:0;background:rgba(20,30,45,.48);z-index:50;animation:fadein .2s ease"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;z-index:51;background:#fff;border-radius:26px 26px 0 0;padding:10px 20px 26px;animation:sheet .32s cubic-bezier(.2,.8,.2,1) both;max-height:80%;display:flex;flex-direction:column">
+      <div style="width:40px;height:5px;border-radius:3px;background:#e1e5ea;margin:4px auto 16px;flex:none"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex:none">
+        <div style="font:700 18px Outfit;color:#23303d">Standort wählen</div>
+        <span class="ms" onclick="A.closeLoc()" style="font-size:24px;color:#aab4be;cursor:pointer">close</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;background:#f1f4f7;border-radius:14px;padding:12px 14px;margin-top:14px;flex:none">
+        <span class="ms" style="font-size:20px;color:#93a0ac">search</span>
+        <span style="font:400 14px Outfit;color:#aab4be">Stadt oder PLZ suchen…</span>
+      </div>
+      <div onclick="A.useGps()" style="display:flex;align-items:center;gap:11px;padding:13px 2px;margin-top:8px;cursor:pointer;flex:none">
+        <span class="ms" style="font-size:21px;color:#1f8fcf;font-variation-settings:'FILL' 1">my_location</span>
+        <span style="font:600 13.5px Outfit;color:#1f8fcf">Aktuellen Standort verwenden</span>
+      </div>
+      <div style="height:1px;background:#eef1f4;margin:2px 0 6px;flex:none"></div>
+      <div class="scrl" style="overflow-y:auto">${rows}</div>
+    </div>`;
+}
+
 // ---------------- RENDER ----------------
 const VIEWS = { heute: viewHeute, verlauf: viewVerlauf, hund: viewHund, profil: viewProfil };
 
@@ -770,6 +814,7 @@ function render(){
         </div>
         ${bottomNav()}
         ${proSheet()}
+        ${locSheet()}
       </div>
     </div>`;
 }

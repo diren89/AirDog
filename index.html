@@ -22,22 +22,165 @@
 <body>
 <div id="app"></div>
 <script>
-// ---------- AirDog: faithful vanilla-JS port of AirDog.dc.html ----------
-
+// ---- state ----
 const state = {
+  // ui
   tab: 'heute', proOpen: false,
   smart: false, drink: true, rain: true,
   expanded: 'now',
   dirs: { wohn: 'S', schlaf: 'O', kueche: 'W' },
-  proUnlocked: false,
-  showAffiliate: true
+  proUnlocked: false, showAffiliate: true,
+
+  // weather (defaults = design values; replaced on first fetch)
+  time: '--:--',
+  dateStr: '',
+  locationName: '…',
+  outdoorTemp: null,
+  feelsLike: null,
+  uvIndex: null,
+  condition: '',
+  indoorTemp: 24,       // ponytail: static assumption, no sensor
+  windowClose: true,    // outdoorTemp > indoorTemp
+  nextVentTime: '--:--',
+  nextVentIn: '',
+  ventCoolingTemp: null,
+  asphaltTemp: null,
+  dogWalkOk: false,
+  nextDogWalkTime: '--:--',
+  dogWalkIn: '',
+  dogWalkAspTemp: null,
+  dogWalkAirTemp: null,
+  rainForecast: null,
 };
 
-// expose simple action handlers for inline onclick
+// ---- weather helpers ----
+const WMO = {
+  0:'Sonnig',1:'Leicht bewölkt',2:'Bewölkt',3:'Bedeckt',
+  45:'Neblig',48:'Gefrierender Nebel',
+  51:'Leichter Nieselregen',53:'Nieselregen',55:'Starker Nieselregen',
+  61:'Leichter Regen',63:'Regen',65:'Starker Regen',
+  71:'Leichter Schnee',73:'Schnee',75:'Starker Schnee',
+  80:'Leichte Schauer',81:'Schauer',82:'Starke Schauer',
+  95:'Gewitter',96:'Gewitter mit Hagel',99:'Starkes Gewitter'
+};
+
+function uvLabel(uv){
+  if(uv<=2) return 'gering';
+  if(uv<=5) return 'mäßig';
+  if(uv<=7) return 'hoch';
+  if(uv<=10) return 'sehr hoch';
+  return 'extrem';
+}
+
+function hhmm(date){ return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`; }
+function hh00(date){ return `${String(date.getHours()).padStart(2,'0')}:00`; }
+
+function updateClock(){
+  const now = new Date();
+  state.time = hhmm(now);
+  const days = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  const months = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  state.dateStr = `${days[now.getDay()]}, ${now.getDate()}. ${months[now.getMonth()]}`;
+  const shortDays = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+  state.dateShort = `${shortDays[now.getDay()]}, ${now.getDate()}. ${months[now.getMonth()]}`;
+}
+
+async function fetchWeather(){
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(async pos => {
+      try {
+        const {latitude: lat, longitude: lon} = pos.coords;
+        const [wRes, gRes] = await Promise.all([
+          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,uv_index&hourly=temperature_2m,precipitation_probability&timezone=auto&forecast_days=2`),
+          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=de`)
+        ]);
+        const w = await wRes.json();
+        const g = await gRes.json();
+
+        // location
+        const addr = g.address || {};
+        const city = addr.city || addr.town || addr.village || '';
+        const district = addr.suburb || addr.neighbourhood || addr.quarter || '';
+        state.locationName = district ? `${city} · ${district}` : city;
+
+        // current
+        const cur = w.current;
+        state.outdoorTemp  = Math.round(cur.temperature_2m);
+        state.feelsLike    = Math.round(cur.apparent_temperature);
+        state.uvIndex      = Math.round(cur.uv_index);
+        state.condition    = WMO[cur.weather_code] || 'Unbekannt';
+        state.windowClose  = state.outdoorTemp > state.indoorTemp;
+
+        // hourly arrays
+        const hTemps  = w.hourly.temperature_2m;
+        const hTimes  = w.hourly.time;
+        const hPrecip = w.hourly.precipitation_probability;
+        const now     = new Date();
+
+        // next ventilation: first hour where outdoor < indoor
+        let ventIdx = -1;
+        for(let i=0; i<hTimes.length; i++){
+          if(new Date(hTimes[i]) <= now) continue;
+          if(hTemps[i] < state.indoorTemp){ ventIdx = i; break; }
+        }
+        if(ventIdx >= 0){
+          const vt = new Date(hTimes[ventIdx]);
+          state.nextVentTime     = hh00(vt);
+          const diffH = Math.floor((vt-now)/3600000);
+          const diffM = Math.floor(((vt-now)%3600000)/60000);
+          state.nextVentIn       = diffM > 0 ? `in ${diffH} Std ${diffM} Min` : `in ${diffH} Std`;
+          state.ventCoolingTemp  = Math.round(hTemps[ventIdx]);
+        }
+
+        // asphalt: sunny wmo 0-2 → ×1.5, else ×1.1
+        const sunny = cur.weather_code <= 2;
+        state.asphaltTemp = Math.round(state.outdoorTemp * (sunny ? 1.5 : 1.1));
+        state.dogWalkOk   = state.asphaltTemp < 35;
+
+        // next dog walk: hourly asphalt < 35°C
+        let dogIdx = -1;
+        for(let i=0; i<hTimes.length; i++){
+          if(new Date(hTimes[i]) <= now) continue;
+          const asp = Math.round(hTemps[i] * (hTemps[i] > 20 ? 1.4 : 1.1));
+          if(asp < 35){ dogIdx = i; break; }
+        }
+        if(dogIdx >= 0){
+          const dt = new Date(hTimes[dogIdx]);
+          state.nextDogWalkTime = hh00(dt);
+          const diffH = Math.floor((dt-now)/3600000);
+          const diffM = Math.floor(((dt-now)%3600000)/60000);
+          state.dogWalkIn       = diffM > 0 ? `In ${diffH} Std ${diffM} Min` : `In ${diffH} Std`;
+          state.dogWalkAspTemp  = Math.round(hTemps[dogIdx] * 1.1);
+          state.dogWalkAirTemp  = Math.round(hTemps[dogIdx]);
+        }
+
+        // next rain: precipitation_probability > 60%
+        let rainIdx = -1;
+        for(let i=0; i<hTimes.length; i++){
+          if(new Date(hTimes[i]) <= now) continue;
+          if(hPrecip[i] > 60){ rainIdx = i; break; }
+        }
+        if(rainIdx >= 0){
+          const rt = new Date(hTimes[rainIdx]);
+          const isToday = rt.toDateString() === now.toDateString();
+          state.rainForecast = `${isToday?'Heute':'Morgen'} ${hh00(rt)} Regen erwartet`;
+        } else {
+          state.rainForecast = null;
+        }
+
+        updateClock();
+        render();
+        resolve();
+      } catch(e){ reject(e); }
+    }, reject, { timeout: 10000 });
+  });
+}
+
+// ---- actions ----
 const A = {
   setTab(t){ state.tab = t; render(); },
   expand(id){ state.expanded = state.expanded === id ? null : id; render(); },
-  setDir(room, dir){ state.dirs = Object.assign({}, state.dirs, { [room]: dir }); render(); },
+  setDir(room, dir){ state.dirs = Object.assign({}, state.dirs, {[room]: dir}); render(); },
   tog(k){ state[k] = !state[k]; render(); },
   openPro(){ state.proOpen = true; render(); },
   closePro(){ state.proOpen = false; render(); }
@@ -53,16 +196,22 @@ function toggle(stateKey){
 }
 
 const statusBar = (color) => `<div style="display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:${color};padding:13px 18px 0">
-  <span>14:00</span>
-  <span style="display:flex;gap:6px" class="ms" >
+  <span>${state.time}</span>
+  <span style="display:flex;gap:6px" class="ms">
     <span style="font-size:17px">signal_cellular_alt</span><span style="font-size:17px">wifi</span><span style="font-size:17px">battery_full</span>
   </span>
 </div>`;
 
 // ---------------- HEUTE ----------------
 function viewHeute(){
-  const locked = !state.proUnlocked;
+  const locked      = !state.proUnlocked;
   const proUnlocked = state.proUnlocked;
+
+  const tempDisplay = state.outdoorTemp !== null ? `${state.outdoorTemp}°` : '…';
+  const feelsStr    = state.feelsLike   !== null ? `Gefühlt ${state.feelsLike}° · UV ${state.uvIndex} ${uvLabel(state.uvIndex)}` : '';
+  const aspStr      = state.asphaltTemp !== null ? `Asphalt ~${state.asphaltTemp}° · zu heiß für Pfoten` : 'Asphalt wird berechnet…';
+  const dogWalkOk   = state.dogWalkOk;
+
   const reminder = locked ? `
     <div onclick="A.openPro()" style="position:relative;display:flex;align-items:center;gap:7px;margin-top:14px;background:rgba(255,255,255,.15);border-radius:13px;padding:10px 12px;cursor:pointer">
       <span class="ms" style="font-size:18px">lock</span>
@@ -72,10 +221,24 @@ function viewHeute(){
   const reminderActive = proUnlocked ? `
     <div style="position:relative;display:flex;align-items:center;gap:7px;margin-top:14px;background:rgba(255,255,255,.15);border-radius:13px;padding:10px 12px">
       <span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">notifications_active</span>
-      <span style="font:500 12.5px Outfit;flex:1">Erinnerung aktiv — wir melden uns 20:30</span>
+      <span style="font:500 12.5px Outfit;flex:1">Erinnerung aktiv — wir melden uns ${state.nextVentTime ? (() => { const [h] = state.nextVentTime.split(':'); return `${String(+h-1).padStart(2,'0')}:30`; })() : '--:--'}</span>
       <span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">check_circle</span>
     </div>` : '';
-  const affiliate = state.showAffiliate ? `
+
+  const ventText = state.ventCoolingTemp !== null
+    ? `Lüften empfohlen — draußen kühlt auf ${state.ventCoolingTemp}°, dann wird's drinnen richtig kühl.`
+    : 'Lüftzeitfenster wird berechnet…';
+
+  const rainCard = state.rainForecast ? `
+    <div style="display:flex;align-items:center;gap:11px;background:#e8edf6;border-radius:18px;padding:13px 15px">
+      <span class="ms" style="font-size:24px;color:#5b78a6;font-variation-settings:'FILL' 1">rainy</span>
+      <div style="flex:1">
+        <div style="font:600 13px Outfit;color:#3f4f68">${state.rainForecast}</div>
+        <div style="font:400 11.5px Outfit;color:#7d8aa0;margin-top:1px">Wir erinnern dich rechtzeitig, die Fenster zu schließen.</div>
+      </div>
+    </div>` : '';
+
+  const affiliateCard = state.showAffiliate ? `
     <div style="background:#fff;border-radius:18px;padding:13px 15px;box-shadow:0 2px 10px rgba(25,45,65,.05);display:flex;align-items:center;gap:13px;cursor:pointer">
       <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#eef1f4;display:flex;align-items:center;justify-content:center;color:#8a96a2;font-size:22px">roller_shades</div>
       <div style="flex:1">
@@ -85,17 +248,25 @@ function viewHeute(){
       <span class="ms" style="font-size:20px;color:#c0c8d0">chevron_right</span>
     </div>` : '';
 
+  const windowBadge = state.windowClose
+    ? `<div style="display:flex;align-items:center;gap:5px;background:rgba(216,138,43,.18);border-radius:20px;padding:6px 11px;font:600 12.5px Outfit;color:#b5701d"><span class="ms" style="font-size:16px;font-variation-settings:'FILL' 1">do_not_disturb_on</span>Fenster zu halten</div>`
+    : `<div style="display:flex;align-items:center;gap:5px;background:rgba(70,154,107,.18);border-radius:20px;padding:6px 11px;font:600 12.5px Outfit;color:#2e7d52"><span class="ms" style="font-size:16px;font-variation-settings:'FILL' 1">air</span>Jetzt lüften!</div>`;
+
+  const dogStatusDot = dogWalkOk
+    ? `<div style="width:13px;height:13px;border-radius:50%;background:#469a6b"></div>`
+    : `<div style="width:13px;height:13px;border-radius:50%;background:#d8543f;animation:pulse 1.8s ease infinite"></div>`;
+
   return `<div>
     <div style="position:relative;background:linear-gradient(168deg,#ffc478 0%,#ffd79a 28%,#fde6c5 56%,#f5f6f8 100%);padding:13px 18px 32px;overflow:hidden">
       <div style="position:absolute;top:-44px;right:-32px;width:170px;height:170px;border-radius:50%;background:radial-gradient(circle,#fff6de 0%,rgba(255,246,222,0) 70%)"></div>
       <div style="position:relative;display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:#7a5a2e">
-        <span>14:00</span>
+        <span>${state.time}</span>
         <span style="display:flex;gap:6px" class="ms"><span style="font-size:17px">signal_cellular_alt</span><span style="font-size:17px">wifi</span><span style="font-size:17px">battery_full</span></span>
       </div>
       <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start;margin-top:14px">
         <div>
-          <div style="display:flex;align-items:center;gap:4px;color:#5c4a2e;font:600 14px Outfit"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">location_on</span>Freiburg i. Br.</div>
-          <div style="color:#8a6b3e;font:400 12.5px Outfit;margin-top:2px">Freitag, 26. Juni</div>
+          <div style="display:flex;align-items:center;gap:4px;color:#5c4a2e;font:600 14px Outfit"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">location_on</span>${state.locationName}</div>
+          <div style="color:#8a6b3e;font:400 12.5px Outfit;margin-top:2px">${state.dateStr}</div>
         </div>
         <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.55);border-radius:22px;padding:4px 11px 4px 5px">
           <div class="ms" style="width:26px;height:26px;border-radius:50%;background:#c0673c;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-variation-settings:'FILL' 1">pets</div>
@@ -103,15 +274,15 @@ function viewHeute(){
         </div>
       </div>
       <div style="position:relative;display:flex;align-items:flex-end;gap:14px;margin-top:20px">
-        <div style="font:300 76px/0.85 Outfit;color:#3a2f20;letter-spacing:-3px">28°</div>
+        <div style="font:300 76px/0.85 Outfit;color:#3a2f20;letter-spacing:-3px">${tempDisplay}</div>
         <div style="padding-bottom:9px">
-          <div style="font:600 16px Outfit;color:#4a3a22">Heiß & sonnig</div>
-          <div style="font:400 13px Outfit;color:#8a6b3e;margin-top:1px">Gefühlt 30° · UV 7 hoch</div>
+          <div style="font:600 16px Outfit;color:#4a3a22">${state.condition}</div>
+          <div style="font:400 13px Outfit;color:#8a6b3e;margin-top:1px">${feelsStr}</div>
         </div>
       </div>
       <div style="position:relative;display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.6);border-radius:20px;padding:6px 11px;font:500 12.5px Outfit;color:#5c4a2e"><span class="ms" style="font-size:16px">home</span>24° innen</div>
-        <div style="display:flex;align-items:center;gap:5px;background:rgba(216,138,43,.18);border-radius:20px;padding:6px 11px;font:600 12.5px Outfit;color:#b5701d"><span class="ms" style="font-size:16px;font-variation-settings:'FILL' 1">do_not_disturb_on</span>Fenster zu halten</div>
+        <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.6);border-radius:20px;padding:6px 11px;font:500 12.5px Outfit;color:#5c4a2e"><span class="ms" style="font-size:16px">home</span>${state.indoorTemp}° innen</div>
+        ${windowBadge}
       </div>
     </div>
 
@@ -121,10 +292,10 @@ function viewHeute(){
         <div style="position:absolute;right:-22px;top:-26px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.10)"></div>
         <div style="position:relative;display:flex;align-items:center;gap:7px;font:600 12px Outfit;color:#dff1fb;text-transform:uppercase;letter-spacing:.6px"><span class="ms" style="font-size:18px">air</span>Nächstes Lüften</div>
         <div style="position:relative;display:flex;align-items:baseline;gap:11px;margin-top:9px">
-          <div style="font:600 40px Outfit;letter-spacing:-1px">21:30</div>
-          <div style="font:500 13px Outfit;color:#dff1fb">in 7 Std 30 Min</div>
+          <div style="font:600 40px Outfit;letter-spacing:-1px">${state.nextVentTime}</div>
+          <div style="font:500 13px Outfit;color:#dff1fb">${state.nextVentIn}</div>
         </div>
-        <div style="position:relative;font:400 13.5px/1.45 Outfit;color:#eaf6fd;margin-top:5px">Querlüften empfohlen — draußen kühlt auf 19°, dann wird's drinnen richtig kühl.</div>
+        <div style="position:relative;font:400 13.5px/1.45 Outfit;color:#eaf6fd;margin-top:5px">${ventText}</div>
         ${reminder}${reminderActive}
       </div>
 
@@ -153,13 +324,13 @@ function viewHeute(){
           <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#f7e6da;display:flex;align-items:center;justify-content:center;color:#c0673c;font-size:23px">pets</div>
           <div style="flex:1">
             <div style="font:600 15px Outfit;color:#23303d">Charlie · Gassi-Ampel</div>
-            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">Asphalt ~42° · zu heiß für Pfoten</div>
+            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">${aspStr}</div>
           </div>
-          <div style="width:13px;height:13px;border-radius:50%;background:#d8543f;animation:pulse 1.8s ease infinite"></div>
+          ${dogStatusDot}
         </div>
         <div style="background:#fbf4f0;border-radius:13px;padding:11px 12px;margin-top:13px;display:flex;align-items:center;gap:9px">
           <span class="ms" style="font-size:19px;color:#c0673c">schedule</span>
-          <span style="font:500 12.5px Outfit;color:#7a5340">Nächste gute Gassi-Zeit <b style="color:#469a6b;font-weight:600">ab 20:30</b></span>
+          <span style="font:500 12.5px Outfit;color:#7a5340">Nächste gute Gassi-Zeit <b style="color:#469a6b;font-weight:600">ab ${state.nextDogWalkTime}</b></span>
         </div>
         <div style="height:1px;background:#eef1f4;margin:13px 0"></div>
         <div style="display:flex;align-items:center;gap:10px">
@@ -172,15 +343,8 @@ function viewHeute(){
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:11px;background:#e8edf6;border-radius:18px;padding:13px 15px">
-        <span class="ms" style="font-size:24px;color:#5b78a6;font-variation-settings:'FILL' 1">rainy</span>
-        <div style="flex:1">
-          <div style="font:600 13px Outfit;color:#3f4f68">Morgen 16:00 Regen erwartet</div>
-          <div style="font:400 11.5px Outfit;color:#7d8aa0;margin-top:1px">Wir erinnern dich rechtzeitig, die Fenster zu schließen.</div>
-        </div>
-      </div>
-
-      ${affiliate}
+      ${rainCard}
+      ${affiliateCard}
     </div>
   </div>`;
 }
@@ -193,25 +357,36 @@ const KINDS = {
   dog:     { accent:'#c0673c', bg:'#f7e6da', icon:'pets' },
   dogGood: { accent:'#469a6b', bg:'#e6f3ec', icon:'pets' }
 };
-const RAW_DAY = [
-  { id:'morg', kind:'open',  st:'past', t:'05:30 – 07:30', title:'Morgenlüften', sub:'Kühle Nachtluft · 17° außen', detail:'Stoß- oder Querlüften für 20–30 Min. Holt die letzte kühle Luft rein, bevor die Sonne kommt.' },
-  { id:'zu',   kind:'close', st:'past', t:'ab 08:00', title:'Fenster zu & abdunkeln', sub:'Süd & West · Rollos runter', detail:'Die Sonne trifft jetzt Süd- und Westfenster. Geschlossen & abgedunkelt bleibt die Wohnung bis zu 4° kühler.' },
-  { id:'now',  kind:'heat',  st:'now', t:'jetzt · 14:00', title:'Hitze draußen halten', sub:'28° außen · 24° innen', detail:'Außen wärmer als innen — jedes offene Fenster heizt auf. Alles zu, Rollos unten. Nächstes Lüften ab 21:30.' },
-  { id:'g1',   kind:'dog',   st:'next', t:'18:00', title:'Gassi noch zu heiß', sub:'Asphalt ~42° · Pfoten-Risiko', detail:'7-Sekunden-Regel: Handrücken 7 Sek auf den Asphalt. Zu heiß für dich = zu heiß für Charlie. Lieber Schatten & kurz.' },
-  { id:'g2',   kind:'dogGood', st:'upcoming', t:'ab 20:30', title:'Gute Gassi-Zeit', sub:'Abkühlung · Pfoten safe', detail:'Asphalt unter 30°, angenehme 23°. Ideal für die große Runde mit Charlie.' },
-  { id:'luft', kind:'open',  st:'upcoming', t:'21:30 – 05:00', title:'Großes Lüften', sub:'Außen 19° < innen 24°', detail:'Jetzt kühlt die Außenluft effektiv runter. Querlüften über Nacht bringt bis zu 5° Abkühlung für morgen.' }
-];
+
+function rawDay(){
+  const out = state.outdoorTemp ?? 28;
+  const ind = state.indoorTemp;
+  const asp = state.asphaltTemp ?? 42;
+  const nv  = state.nextVentTime || '21:30';
+  const ndw = state.nextDogWalkTime || '20:30';
+  const vc  = state.ventCoolingTemp ?? 19;
+  const da  = state.dogWalkAirTemp ?? 23;
+  const ds  = state.dogWalkAspTemp ?? 28;
+  return [
+    { id:'morg', kind:'open',    st:'past',     t:'05:30 – 07:30', title:'Morgenlüften',         sub:`Kühle Nachtluft · ${vc}° außen`,        detail:`Stoß- oder Querlüften für 20–30 Min. Holt die letzte kühle Luft rein, bevor die Sonne kommt.` },
+    { id:'zu',   kind:'close',   st:'past',     t:'ab 08:00',      title:'Fenster zu & abdunkeln',sub:'Süd & West · Rollos runter',             detail:'Die Sonne trifft jetzt Süd- und Westfenster. Geschlossen & abgedunkelt bleibt die Wohnung bis zu 4° kühler.' },
+    { id:'now',  kind:'heat',    st:'now',      t:`jetzt · ${state.time}`, title:'Hitze draußen halten', sub:`${out}° außen · ${ind}° innen`, detail:`Außen wärmer als innen — jedes offene Fenster heizt auf. Alles zu, Rollos unten. Nächstes Lüften ab ${nv}.` },
+    { id:'g1',   kind:'dog',     st:'next',     t:'18:00',         title:'Gassi noch zu heiß',    sub:`Asphalt ~${asp}° · Pfoten-Risiko`,      detail:`7-Sekunden-Regel: Handrücken 7 Sek auf den Asphalt. Zu heiß für dich = zu heiß für Charlie. Lieber Schatten & kurz.` },
+    { id:'g2',   kind:'dogGood', st:'upcoming', t:`ab ${ndw}`,     title:'Gute Gassi-Zeit',       sub:`Abkühlung · Pfoten safe`,               detail:`Asphalt unter ${ds}°, angenehme ${da}°. Ideal für die große Runde mit Charlie.` },
+    { id:'luft', kind:'open',    st:'upcoming', t:`${nv} – 05:00`, title:'Großes Lüften',         sub:`Außen ${vc}° < innen ${ind}°`,          detail:`Jetzt kühlt die Außenluft effektiv runter. Querlüften über Nacht bringt bis zu 5° Abkühlung für morgen.` }
+  ];
+}
 
 function viewVerlauf(){
-  const items = RAW_DAY.map(it => {
-    const k = KINDS[it.kind];
-    const now = it.st === 'now';
-    const done = it.st === 'past';
-    const open = state.expanded === it.id;
-    const dot = (done || now) ? k.accent : '#fff';
-    const timeColor = now ? k.accent : '#93a0ac';
-    const ring = now ? ('0 0 0 1.5px ' + k.accent) : '0 1px 3px rgba(20,40,60,.05)';
-    const detail = open ? `<div style="font:400 12.5px/1.5 Outfit;color:#6b7682;margin-top:11px;padding-top:11px;border-top:1px solid #eef1f4">${it.detail}</div>` : '';
+  const items = rawDay().map(it => {
+    const k    = KINDS[it.kind];
+    const isNow  = it.st === 'now';
+    const done   = it.st === 'past';
+    const open   = state.expanded === it.id;
+    const dot       = (done || isNow) ? k.accent : '#fff';
+    const timeColor = isNow ? k.accent : '#93a0ac';
+    const ring      = isNow ? ('0 0 0 1.5px ' + k.accent) : '0 1px 3px rgba(20,40,60,.05)';
+    const detail    = open ? `<div style="font:400 12.5px/1.5 Outfit;color:#6b7682;margin-top:11px;padding-top:11px;border-top:1px solid #eef1f4">${it.detail}</div>` : '';
     return `<div onclick="A.expand('${it.id}')" style="display:flex;gap:13px;cursor:pointer">
       <div style="position:relative;width:22px;flex:none;display:flex;justify-content:center">
         <div style="position:absolute;top:0;bottom:0;width:2px;background:#e5e9ed"></div>
@@ -235,7 +410,7 @@ function viewVerlauf(){
     ${statusBar('#3a4651')}
     <div style="padding:14px 18px 0">
       <div style="font:600 25px Outfit;color:#23303d">Tagesverlauf</div>
-      <div style="font:400 13px Outfit;color:#7d8995;margin-top:1px">Fr, 26. Juni · auf deine Fenster abgestimmt</div>
+      <div style="font:400 13px Outfit;color:#7d8995;margin-top:1px">${state.dateShort || state.dateStr} · auf deine Fenster abgestimmt</div>
     </div>
     <div style="display:flex;gap:7px;padding:14px 18px 8px;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:5px;font:500 11.5px Outfit;color:#5b6772"><span style="width:9px;height:9px;border-radius:50%;background:#1f8fcf"></span>Lüften</div>
@@ -251,6 +426,24 @@ function viewVerlauf(){
 
 // ---------------- HUND ----------------
 function viewHund(){
+  const asp     = state.asphaltTemp ?? 42;
+  const ok      = state.dogWalkOk;
+  const ndw     = state.nextDogWalkTime || '20:30';
+  const dogIn   = state.dogWalkIn || 'In 6 Std 30 Min';
+  const dogAsp  = state.dogWalkAspTemp ?? 28;
+  const dogAir  = state.dogWalkAirTemp ?? 23;
+
+  const ampelBg    = ok ? 'linear-gradient(140deg,#3a9e6a,#2d7a52)' : 'linear-gradient(140deg,#cc6e42,#a8542f)';
+  const ampelShadow= ok ? '0 10px 24px rgba(45,122,82,.28)' : '0 10px 24px rgba(168,84,47,.28)';
+  const ampelLabel = ok ? 'Gute Zeit!' : 'Lieber warten';
+  const ampelSub   = ok
+    ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;font:500 13px Outfit;color:#d0f0e0"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">check_circle</span>Asphalt okay · ~${asp}°</div>`
+    : `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;font:500 13px Outfit;color:#fbe2d4"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">local_fire_department</span>Asphalt zu heiß · ~${asp}°</div>`;
+  const dot1 = ok ? 'rgba(255,255,255,.28)' : '#ff5b40';
+  const dot3 = ok ? '#4adb8a' : 'rgba(255,255,255,.28)';
+  const dot1shadow = ok ? '' : 'box-shadow:0 0 9px #ff5b40';
+  const dot3shadow = ok ? 'box-shadow:0 0 9px #4adb8a' : '';
+
   return `<div>
     ${statusBar('#3a4651')}
     <div style="padding:14px 18px 0;display:flex;align-items:center;gap:11px">
@@ -262,22 +455,22 @@ function viewHund(){
     </div>
 
     <div style="padding:16px 16px 8px;display:flex;flex-direction:column;gap:14px">
-      <div style="border-radius:22px;padding:18px;background:linear-gradient(140deg,#cc6e42,#a8542f);color:#fff;box-shadow:0 10px 24px rgba(168,84,47,.28)">
+      <div style="border-radius:22px;padding:18px;background:${ampelBg};color:#fff;box-shadow:${ampelShadow}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <div style="font:600 12px Outfit;text-transform:uppercase;letter-spacing:.6px;color:#fbe2d4">Gassi-Ampel</div>
-            <div style="font:600 25px Outfit;margin-top:5px">Lieber warten</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font:500 13px Outfit;color:#fbe2d4"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">local_fire_department</span>Asphalt zu heiß · ~42°</div>
+            <div style="font:600 12px Outfit;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.75)">Gassi-Ampel</div>
+            <div style="font:600 25px Outfit;margin-top:5px">${ampelLabel}</div>
+            ${ampelSub}
           </div>
           <div style="display:flex;flex-direction:column;gap:7px;background:rgba(0,0,0,.14);padding:9px;border-radius:30px">
-            <span style="width:13px;height:13px;border-radius:50%;background:#ff5b40;box-shadow:0 0 9px #ff5b40"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:${dot1};${dot1shadow}"></span>
             <span style="width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.28)"></span>
-            <span style="width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.28)"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:${dot3};${dot3shadow}"></span>
           </div>
         </div>
         <div style="background:rgba(255,255,255,.15);border-radius:14px;padding:12px 13px;margin-top:15px">
-          <div style="display:flex;align-items:center;gap:8px;font:600 13px Outfit"><span class="ms" style="font-size:19px">schedule</span>Gute Gassi-Zeit ab 20:30</div>
-          <div style="font:400 12px Outfit;color:#fbe2d4;margin-top:4px;padding-left:27px">In 6 Std 30 Min · dann Asphalt 28°, Luft 23°. Wir schicken dir eine Erinnerung.</div>
+          <div style="display:flex;align-items:center;gap:8px;font:600 13px Outfit"><span class="ms" style="font-size:19px">schedule</span>Gute Gassi-Zeit ab ${ndw}</div>
+          <div style="font:400 12px Outfit;color:rgba(255,255,255,.75);margin-top:4px;padding-left:27px">${dogIn} · dann Asphalt ${dogAsp}°, Luft ${dogAir}°. Wir schicken dir eine Erinnerung.</div>
         </div>
       </div>
 
@@ -285,7 +478,7 @@ function viewHund(){
         <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#fbecd6;display:flex;align-items:center;justify-content:center;color:#d98a2b;font-size:22px">device_thermostat</div>
         <div style="flex:1">
           <div style="font:600 14px Outfit;color:#26333f">7-Sekunden-Pfotentest</div>
-          <div style="font:400 12.5px/1.45 Outfit;color:#7d8995;margin-top:3px">Halt deinen Handrücken 7 Sekunden auf den Asphalt. Zu heiß für dich = zu heiß für Charlie' Pfoten. Jetzt: lieber Schatten & kurze Runden.</div>
+          <div style="font:400 12.5px/1.45 Outfit;color:#7d8995;margin-top:3px">Halt deinen Handrücken 7 Sekunden auf den Asphalt. Zu heiß für dich = zu heiß für Charlies Pfoten. Jetzt: lieber Schatten & kurze Runden.</div>
         </div>
       </div>
 
@@ -320,15 +513,16 @@ function viewHund(){
 // ---------------- PROFIL ----------------
 const DIR_LABEL = { N:'Nord', O:'Ost', S:'Süd', W:'West' };
 const SUN_INFO  = { N:'kühl · kaum Sonne', O:'Morgensonne 6–11 Uhr', S:'volle Sonne 11–16 Uhr', W:'Abendsonne 15–20 Uhr' };
-const ROOM_DEFS = [
-  ['wohn','Wohnzimmer','weekend'],
-  ['schlaf','Schlafzimmer','king_bed'],
-  ['kueche','Küche','countertops']
-];
+const ROOM_DEFS = [['wohn','Wohnzimmer','weekend'],['schlaf','Schlafzimmer','king_bed'],['kueche','Küche','countertops']];
 const AFFILIATE = [
   { icon:'roller_shades', title:'Smarte Rollos', sub:'Auto-Abdunkeln nach Sonnenstand', price:'ab 89 €' },
   { icon:'device_thermostat', title:'Wetterstation', sub:'Innen- & Außentemp live messen', price:'ab 49 €' },
   { icon:'bolt', title:'Balkonkraftwerk', sub:'600 W für Ventilator & Klimagerät', price:'ab 399 €' }
+];
+const PRO_FEATURES = [
+  { icon:'roller_shades', title:'Abdunkelungs-Assistent', sub:'Rollo-Plan nach Fensterrichtung & Sonnenstand — Raum für Raum.' },
+  { icon:'notifications_active', title:'1 Std Vorankündigung', sub:'Erinnerung, bevor das nächste Lüften-Fenster startet.' },
+  { icon:'block', title:'Werbefrei', sub:'Keine Empfehlungen, keine Banner — volle Ruhe.' }
 ];
 
 function viewProfil(){
@@ -337,18 +531,12 @@ function viewProfil(){
     const sun = SUN_INFO[state.dirs[key]];
     const opts = ['N','O','S','W'].map(v => {
       const active = state.dirs[key] === v;
-      const bg = active ? '#1f8fcf' : '#f1f4f7';
-      const color = active ? '#fff' : '#5b6772';
-      const border = active ? '#1f8fcf' : '#eceff2';
-      return `<div onclick="A.setDir('${key}','${v}')" style="flex:1;text-align:center;padding:9px 0;border-radius:11px;font:600 13px Outfit;cursor:pointer;background:${bg};color:${color};border:1.5px solid ${border};transition:all .15s">${v}</div>`;
+      return `<div onclick="A.setDir('${key}','${v}')" style="flex:1;text-align:center;padding:9px 0;border-radius:11px;font:600 13px Outfit;cursor:pointer;background:${active?'#1f8fcf':'#f1f4f7'};color:${active?'#fff':'#5b6772'};border:1.5px solid ${active?'#1f8fcf':'#eceff2'};transition:all .15s">${v}</div>`;
     }).join('');
     return `<div style="background:#fff;border-radius:16px;padding:14px;margin-bottom:10px;box-shadow:0 2px 10px rgba(25,45,65,.05)">
       <div style="display:flex;align-items:center;gap:10px">
         <span class="ms" style="font-size:22px;color:#7d8995">${icon}</span>
-        <div style="flex:1">
-          <div style="font:600 14px Outfit;color:#26333f">${name}</div>
-          <div style="font:400 11.5px Outfit;color:#9aa6b2">${cur} · ${sun}</div>
-        </div>
+        <div style="flex:1"><div style="font:600 14px Outfit;color:#26333f">${name}</div><div style="font:400 11.5px Outfit;color:#9aa6b2">${cur} · ${sun}</div></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">${opts}</div>
     </div>`;
@@ -358,12 +546,11 @@ function viewProfil(){
     <div>
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 9px"><span style="font:600 12px Outfit;color:#9aa6b2;text-transform:uppercase;letter-spacing:.6px">Empfehlungen</span><span style="font:400 10.5px Outfit;color:#b5bfc8">Anzeige</span></div>
       <div style="background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(25,45,65,.05);overflow:hidden">
-        ${AFFILIATE.map((a,i) => `
-          <div style="display:flex;align-items:center;gap:13px;padding:14px;border-top:1px solid ${i===0?'transparent':'#eef1f4'};cursor:pointer">
-            <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#f1f4f7;display:flex;align-items:center;justify-content:center;color:#7d8995;font-size:22px">${a.icon}</div>
-            <div style="flex:1"><div style="font:600 13.5px Outfit;color:#2a3742">${a.title}</div><div style="font:400 11.5px Outfit;color:#9aa6b2">${a.sub}</div></div>
-            <div style="text-align:right"><div style="font:600 12.5px Outfit;color:#469a6b">${a.price}</div><span class="ms" style="font-size:18px;color:#c0c8d0">chevron_right</span></div>
-          </div>`).join('')}
+        ${AFFILIATE.map((a,i) => `<div style="display:flex;align-items:center;gap:13px;padding:14px;border-top:1px solid ${i?'#eef1f4':'transparent'};cursor:pointer">
+          <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#f1f4f7;display:flex;align-items:center;justify-content:center;color:#7d8995;font-size:22px">${a.icon}</div>
+          <div style="flex:1"><div style="font:600 13.5px Outfit;color:#2a3742">${a.title}</div><div style="font:400 11.5px Outfit;color:#9aa6b2">${a.sub}</div></div>
+          <div style="text-align:right"><div style="font:600 12.5px Outfit;color:#469a6b">${a.price}</div><span class="ms" style="font-size:18px;color:#c0c8d0">chevron_right</span></div>
+        </div>`).join('')}
       </div>
     </div>` : '';
 
@@ -373,13 +560,11 @@ function viewProfil(){
       <div style="font:600 25px Outfit;color:#23303d">Profil & Setup</div>
       <div style="font:400 13px Outfit;color:#7d8995;margin-top:1px">So weiß AirDog, wann gelüftet wird</div>
     </div>
-
     <div style="padding:16px 16px 8px;display:flex;flex-direction:column;gap:18px">
       <div>
         <div style="font:600 12px Outfit;color:#9aa6b2;text-transform:uppercase;letter-spacing:.6px;margin:0 4px 9px">Fensterrichtung pro Raum</div>
         ${rooms}
       </div>
-
       <div>
         <div style="font:600 12px Outfit;color:#9aa6b2;text-transform:uppercase;letter-spacing:.6px;margin:0 4px 9px">Smart Home & Hinweise</div>
         <div style="background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(25,45,65,.05);overflow:hidden">
@@ -402,9 +587,8 @@ function viewProfil(){
           </div>
         </div>
       </div>
-
       <div onclick="A.openPro()" style="border-radius:20px;padding:18px;background:linear-gradient(135deg,#3b6ea5,#2a4d7a);color:#fff;cursor:pointer;box-shadow:0 10px 24px rgba(42,77,122,.28);position:relative;overflow:hidden">
-        <div style="position:absolute;right:-18px;bottom:-24px;font-size:120px;color:rgba(255,255,255,.07)" class="ms" >workspace_premium</div>
+        <div style="position:absolute;right:-18px;bottom:-24px;font-size:120px;color:rgba(255,255,255,.07)" class="ms">workspace_premium</div>
         <div style="position:relative;display:flex;align-items:center;gap:8px;font:700 14px Outfit"><span class="ms" style="font-size:20px;font-variation-settings:'FILL' 1">workspace_premium</span>AirDog Pro</div>
         <div style="position:relative;font:400 13px/1.45 Outfit;color:#dbe7f3;margin-top:7px">Abdunkelungs-Assistent nach Sonnenstand + Vorankündigung 1 Std vorher. Werbefrei.</div>
         <div style="position:relative;display:flex;align-items:center;gap:10px;margin-top:14px">
@@ -412,55 +596,43 @@ function viewProfil(){
           <span style="font:400 12px Outfit;color:#bcd0e6">ab 2,99 € / Monat</span>
         </div>
       </div>
-
       ${affiliateSec}
-
-      <div style="text-align:center;font:400 11px Outfit;color:#b5bfc8;padding:4px 0 2px">AirDog · v1.0 · Standort: Freiburg i. Br.</div>
+      <div style="text-align:center;font:400 11px Outfit;color:#b5bfc8;padding:4px 0 2px">AirDog · v1.0 · Standort: ${state.locationName}</div>
     </div>
   </div>`;
 }
 
 // ---------------- BOTTOM NAV ----------------
 function bottomNav(){
-  const items = [
-    ['heute','Heute','wb_sunny'],
-    ['verlauf','Verlauf','calendar_today'],
-    ['hund','Hund','pets'],
-    ['profil','Profil','tune']
-  ].map(([key,label,icon]) => {
-    const active = state.tab === key;
-    const color = active ? '#1f8fcf' : '#9aa6b2';
-    const fill = active ? 1 : 0;
-    return `<div onclick="A.setTab('${key}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
-      <span class="ms" style="font-size:25px;line-height:1;color:${color};font-variation-settings:'FILL' ${fill}">${icon}</span>
-      <span style="font:500 11px Outfit;color:${color}">${label}</span>
-    </div>`;
-  }).join('');
-  return `<div style="position:absolute;left:0;right:0;bottom:0;height:76px;background:rgba(255,255,255,.93);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid #e9ecf0;display:flex;padding:9px 12px 16px">${items}</div>`;
+  return `<div style="position:absolute;left:0;right:0;bottom:0;height:76px;background:rgba(255,255,255,.93);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid #e9ecf0;display:flex;padding:9px 12px 16px">
+    ${[['heute','Heute','wb_sunny'],['verlauf','Verlauf','calendar_today'],['hund','Hund','pets'],['profil','Profil','tune']].map(([key,label,icon]) => {
+      const active = state.tab === key;
+      const color = active ? '#1f8fcf' : '#9aa6b2';
+      return `<div onclick="A.setTab('${key}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+        <span class="ms" style="font-size:25px;line-height:1;color:${color};font-variation-settings:'FILL' ${active?1:0}">${icon}</span>
+        <span style="font:500 11px Outfit;color:${color}">${label}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 // ---------------- PRO SHEET ----------------
-const PRO_FEATURES = [
-  { icon:'roller_shades', title:'Abdunkelungs-Assistent', sub:'Rollo-Plan nach Fensterrichtung & Sonnenstand — Raum für Raum.' },
-  { icon:'notifications_active', title:'1 Std Vorankündigung', sub:'Erinnerung, bevor das nächste Lüften-Fenster startet.' },
-  { icon:'block', title:'Werbefrei', sub:'Keine Empfehlungen, keine Banner — volle Ruhe.' }
-];
 function proSheet(){
   if(!state.proOpen) return '';
-  const feats = PRO_FEATURES.map(f => `
-    <div style="display:flex;align-items:flex-start;gap:11px">
-      <div class="ms" style="width:34px;height:34px;border-radius:10px;background:#e4eef8;display:flex;align-items:center;justify-content:center;color:#3b6ea5;flex:none;font-size:19px">${f.icon}</div>
-      <div style="flex:1"><div style="font:600 14px Outfit;color:#26333f">${f.title}</div><div style="font:400 12px/1.4 Outfit;color:#7d8995;margin-top:1px">${f.sub}</div></div>
-    </div>`).join('');
   return `
-    <div onclick="A.closePro()" style="position:absolute;inset:0;background:rgba(20,30,45,.48);z-index:50;display:flex;align-items:flex-end;animation:fadein .2s ease"></div>
+    <div onclick="A.closePro()" style="position:absolute;inset:0;background:rgba(20,30,45,.48);z-index:50;animation:fadein .2s ease"></div>
     <div style="position:absolute;left:0;right:0;bottom:0;z-index:51;background:#fff;border-radius:26px 26px 0 0;padding:10px 20px 26px;animation:sheet .32s cubic-bezier(.2,.8,.2,1) both">
       <div style="width:40px;height:5px;border-radius:3px;background:#e1e5ea;margin:4px auto 16px"></div>
       <div style="display:flex;align-items:center;gap:9px">
         <div class="ms" style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#3b6ea5,#2a4d7a);display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px;font-variation-settings:'FILL' 1">workspace_premium</div>
         <div><div style="font:700 18px Outfit;color:#23303d">AirDog Pro</div><div style="font:400 12px Outfit;color:#7d8995">Hol das Maximum aus deiner Wohnung</div></div>
       </div>
-      <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">${feats}</div>
+      <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">
+        ${PRO_FEATURES.map(f => `<div style="display:flex;align-items:flex-start;gap:11px">
+          <div class="ms" style="width:34px;height:34px;border-radius:10px;background:#e4eef8;display:flex;align-items:center;justify-content:center;color:#3b6ea5;flex:none;font-size:19px">${f.icon}</div>
+          <div style="flex:1"><div style="font:600 14px Outfit;color:#26333f">${f.title}</div><div style="font:400 12px/1.4 Outfit;color:#7d8995;margin-top:1px">${f.sub}</div></div>
+        </div>`).join('')}
+      </div>
       <div style="display:flex;gap:10px;margin-top:20px">
         <div style="flex:1;border:1.5px solid #e4e8ec;border-radius:14px;padding:12px;text-align:center"><div style="font:400 11px Outfit;color:#9aa6b2">Monatlich</div><div style="font:600 17px Outfit;color:#26333f;margin-top:2px">2,99 €</div></div>
         <div style="flex:1;border:1.5px solid #2a4d7a;border-radius:14px;padding:12px;text-align:center;background:#f3f7fc;position:relative"><div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#2a4d7a;color:#fff;font:600 9.5px Outfit;padding:2px 8px;border-radius:10px;white-space:nowrap">−44%</div><div style="font:400 11px Outfit;color:#5b6772">Jährlich</div><div style="font:600 17px Outfit;color:#2a4d7a;margin-top:2px">19,99 €</div></div>
@@ -474,12 +646,11 @@ function proSheet(){
 const VIEWS = { heute: viewHeute, verlauf: viewVerlauf, hund: viewHund, profil: viewProfil };
 
 function render(){
-  const body = VIEWS[state.tab]();
   document.getElementById('app').innerHTML = `
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 100% at 50% 0%,#eef1f4,#e3e7ec);padding:26px;font-family:Outfit,system-ui,sans-serif">
       <div style="width:390px;height:844px;background:#f5f6f8;border-radius:42px;overflow:hidden;position:relative;box-shadow:0 36px 80px rgba(20,35,55,.24),0 0 0 1px rgba(0,0,0,.03)">
         <div class="scrl" style="height:100%;overflow-y:auto">
-          ${body}
+          ${VIEWS[state.tab]()}
           <div style="height:88px"></div>
         </div>
         ${bottomNav()}
@@ -488,7 +659,18 @@ function render(){
     </div>`;
 }
 
+// ---------------- BOOT ----------------
+updateClock();
 render();
+
+// clock: update every minute
+setInterval(() => { updateClock(); render(); }, 60000);
+
+// weather: fetch now, refresh every 10 min
+fetchWeather().catch(() => {
+  // geolocation denied or network error — keep defaults, show '--:--'
+});
+setInterval(() => fetchWeather().catch(() => {}), 600000);
 </script>
 </body>
 </html>

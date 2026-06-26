@@ -51,15 +51,43 @@ const state = {
   dogWalkAspTemp: null,
   dogWalkAirTemp: null,
   rainForecast: null,
+  // pollen (live from air quality API)
+  pollenData: [],
+  pollenBadge: { bg:'#eef1f4', color:'#9aa6b2', level:'…' },
+  pollenSubtitle: '…',
+  // tick risk (derived from temp + humidity)
+  humidity: null,
+  tickLevel: 0,
 };
 
-// ---- pollen (static; ponytail: replace with API when source confirmed) ----
-const POLLEN = [
-  { name:'Gräser', label:'Hoch',    color:'#d8543f', width:'92%' },
-  { name:'Beifuß', label:'Mittel',  color:'#d98a2b', width:'58%' },
-  { name:'Birke',  label:'Niedrig', color:'#4a9d6e', width:'24%' }
+// ---- pollen + tick helpers ----
+const POLLEN_META = {
+  niedrig:     { label:'Niedrig',   color:'#4a9d6e', width:'24%',  badgeBg:'#e8f4ee' },
+  mittel:      { label:'Mittel',    color:'#d98a2b', width:'58%',  badgeBg:'#fbecd6' },
+  hoch:        { label:'Hoch',      color:'#d8543f', width:'92%',  badgeBg:'#fce8e5' },
+  'sehr hoch': { label:'Sehr hoch', color:'#a0222a', width:'100%', badgeBg:'#fce8e5' }
+};
+const TICK_META = [
+  null,
+  { label:'Niedrig',   color:'#4a9d6e', badgeBg:'#e8f4ee', sub:'Kalt · kaum Zeckenaktivität' },
+  { label:'Gering',    color:'#7db855', badgeBg:'#eef6e6', sub:'Kühl · geringe Aktivität' },
+  { label:'Mittel',    color:'#d98a2b', badgeBg:'#fbecd6', sub:'Mild · Zecken vereinzelt aktiv' },
+  { label:'Hoch',      color:'#bf6a28', badgeBg:'#f7e3d4', sub:'Warm & feucht · ideale Bedingungen' },
+  { label:'Sehr hoch', color:'#d8543f', badgeBg:'#fce8e5', sub:'Heiß & feucht · maximales Risiko' }
 ];
-const POLLEN_BADGE = { bg:'#fbecd6', color:'#c07d1d', level:'Mittel' };
+function pollenLvl(grains, thr){
+  if(grains < thr[0]) return 'niedrig';
+  if(grains < thr[1]) return 'mittel';
+  if(grains < thr[2]) return 'hoch';
+  return 'sehr hoch';
+}
+function tickRisk(temp, hum){
+  if(temp === null || temp < 7)  return 1;
+  if(temp < 15) return 2;
+  if(temp >= 25 && hum >= 60) return 5;
+  if(temp >= 20) return 4;
+  return 3;
+}
 
 // ---- weather helpers ----
 const WMO = {
@@ -98,12 +126,14 @@ async function fetchWeather(){
     navigator.geolocation.getCurrentPosition(async pos => {
       try {
         const {latitude: lat, longitude: lon} = pos.coords;
-        const [wRes, gRes] = await Promise.all([
-          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,uv_index&hourly=temperature_2m,precipitation_probability&timezone=auto&forecast_days=2`),
-          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=de`)
+        const [wRes, gRes, aRes] = await Promise.all([
+          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,uv_index,relative_humidity_2m&hourly=temperature_2m,precipitation_probability&timezone=auto&forecast_days=2`),
+          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=de`),
+          fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=grass_pollen,mugwort_pollen,birch_pollen&timezone=auto&forecast_days=1`)
         ]);
         const w = await wRes.json();
         const g = await gRes.json();
+        const a = await aRes.json();
 
         // location
         const addr = g.address || {};
@@ -118,6 +148,32 @@ async function fetchWeather(){
         state.uvIndex      = Math.round(cur.uv_index);
         state.condition    = WMO[cur.weather_code] || 'Unbekannt';
         state.windowClose  = state.outdoorTemp > state.indoorTemp;
+        state.humidity     = Math.round(cur.relative_humidity_2m);
+
+        // tick risk
+        state.tickLevel = tickRisk(state.outdoorTemp, state.humidity);
+
+        // pollen (current local hour from air quality API)
+        const _p = n => String(n).padStart(2,'0');
+        const _nd = new Date();
+        const localHour = `${_nd.getFullYear()}-${_p(_nd.getMonth()+1)}-${_p(_nd.getDate())}T${_p(_nd.getHours())}:00`;
+        const aTimes  = a.hourly?.time || [];
+        const aIdx    = aTimes.indexOf(localHour);
+        const grass   = aIdx >= 0 ? (a.hourly.grass_pollen[aIdx]   ?? 0) : 0;
+        const mugwort = aIdx >= 0 ? (a.hourly.mugwort_pollen[aIdx] ?? 0) : 0;
+        const birch   = aIdx >= 0 ? (a.hourly.birch_pollen[aIdx]   ?? 0) : 0;
+        const plvls   = [pollenLvl(grass,[10,50,150]), pollenLvl(mugwort,[5,20,50]), pollenLvl(birch,[10,100,300])];
+        const lvlOrd  = ['niedrig','mittel','hoch','sehr hoch'];
+        const wIdx    = plvls.reduce((wi,l,i) => lvlOrd.indexOf(l) > lvlOrd.indexOf(plvls[wi]) ? i : wi, 0);
+        const wMeta   = POLLEN_META[plvls[wIdx]];
+        state.pollenData = ['Gräser','Beifuß','Birke'].map((name,i) => {
+          const m = POLLEN_META[plvls[i]];
+          return { name, label:m.label, color:m.color, width:m.width };
+        });
+        state.pollenBadge    = { bg:wMeta.badgeBg, color:wMeta.color, level:wMeta.label };
+        state.pollenSubtitle = plvls[wIdx] === 'niedrig'
+          ? 'Geringe Belastung · Wert lokal gemessen'
+          : `${ ['Gräser','Beifuß','Birke'][wIdx] }-Hochsaison · Wert lokal gemessen`;
 
         // hourly arrays
         const hTemps  = w.hourly.temperature_2m;
@@ -219,6 +275,7 @@ function viewHeute(){
   const feelsStr    = state.feelsLike   !== null ? `Gefühlt ${state.feelsLike}° · UV ${state.uvIndex} ${uvLabel(state.uvIndex)}` : '';
   const aspStr      = state.asphaltTemp !== null ? `Asphalt ~${state.asphaltTemp}° · zu heiß für Pfoten` : 'Asphalt wird berechnet…';
   const dogWalkOk   = state.dogWalkOk;
+  const tick        = TICK_META[state.tickLevel] || TICK_META[1];
 
   const reminder = locked ? `
     <div onclick="A.openPro()" style="position:relative;display:flex;align-items:center;gap:7px;margin-top:14px;background:rgba(255,255,255,.15);border-radius:13px;padding:10px 12px;cursor:pointer">
@@ -358,14 +415,14 @@ function viewHeute(){
           <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#eaf3e2;display:flex;align-items:center;justify-content:center;color:#6a9a3e;font-size:23px;font-variation-settings:'FILL' 1">filter_vintage</div>
           <div style="flex:1">
             <div style="font:600 15px Outfit;color:#23303d">Pollenbelastung</div>
-            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">Gräser-Hochsaison · Wert lokal gemessen</div>
+            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">${state.pollenSubtitle}</div>
           </div>
-          <div style="display:inline-flex;align-items:center;gap:5px;background:${POLLEN_BADGE.bg};color:${POLLEN_BADGE.color};font:700 11px Outfit;padding:5px 10px;border-radius:20px">
-            <span style="width:7px;height:7px;border-radius:50%;background:${POLLEN_BADGE.color}"></span>${POLLEN_BADGE.level}
+          <div style="display:inline-flex;align-items:center;gap:5px;background:${state.pollenBadge.bg};color:${state.pollenBadge.color};font:700 11px Outfit;padding:5px 10px;border-radius:20px">
+            <span style="width:7px;height:7px;border-radius:50%;background:${state.pollenBadge.color}"></span>${state.pollenBadge.level}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:11px;margin-top:15px">
-          ${POLLEN.map(p => `<div style="display:flex;align-items:center;gap:11px">
+          ${state.pollenData.map(p => `<div style="display:flex;align-items:center;gap:11px">
             <span style="font:500 12.5px Outfit;color:#5b6772;width:64px;flex:none">${p.name}</span>
             <div style="flex:1;height:7px;border-radius:5px;background:#eef1f4;overflow:hidden">
               <div style="height:100%;width:${p.width};border-radius:5px;background:${p.color}"></div>
@@ -384,14 +441,14 @@ function viewHeute(){
           <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#f2e7da;display:flex;align-items:center;justify-content:center;color:#a06a35;font-size:23px;font-variation-settings:'FILL' 1">pest_control</div>
           <div style="flex:1">
             <div style="font:600 15px Outfit;color:#23303d">Zeckenrisiko</div>
-            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">Warm &amp; feucht · ideale Bedingungen</div>
+            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">${tick.sub}</div>
           </div>
-          <div style="display:inline-flex;align-items:center;gap:5px;background:#f7e3d4;color:#bf6a28;font:700 11px Outfit;padding:5px 10px;border-radius:20px">
-            <span style="width:7px;height:7px;border-radius:50%;background:#bf6a28"></span>Hoch
+          <div style="display:inline-flex;align-items:center;gap:5px;background:${tick.badgeBg};color:${tick.color};font:700 11px Outfit;padding:5px 10px;border-radius:20px">
+            <span style="width:7px;height:7px;border-radius:50%;background:${tick.color}"></span>${tick.label}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:4px;margin-top:15px">
-          ${['#4a9d6e','#a3c14a','#e0c23a','#e08a2b','#d8543f'].map((c,i) => `<div style="flex:1;height:8px;border-radius:5px;background:${i < 4 ? c : '#eef1f4'}"></div>`).join('')}
+          ${['#4a9d6e','#a3c14a','#e0c23a','#e08a2b','#d8543f'].map((c,i) => `<div style="flex:1;height:8px;border-radius:5px;background:${i < state.tickLevel ? c : '#eef1f4'}"></div>`).join('')}
         </div>
         <div style="display:flex;justify-content:space-between;margin-top:6px;font:500 10.5px Outfit;color:#aab4be">
           <span>Niedrig</span><span>Sehr hoch</span>

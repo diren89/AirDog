@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AirDog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,-25..200&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0}
+  .scrl::-webkit-scrollbar{display:none}
+  .scrl{scrollbar-width:none}
+  @keyframes scrn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(216,84,63,.30)}50%{box-shadow:0 0 0 7px rgba(216,84,63,0)}}
+  @keyframes sheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+  .ms{font-family:'Material Symbols Rounded'}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ---------- AirDog: faithful vanilla-JS port of AirDog.dc.html ----------
+
+const state = {
+  tab: 'heute', proOpen: false,
+  smart: false, drink: true, rain: true,
+  expanded: 'now',
+  dirs: { wohn: 'S', schlaf: 'O', kueche: 'W' },
+  proUnlocked: false,
+  showAffiliate: true
+};
+
+// expose simple action handlers for inline onclick
+const A = {
+  setTab(t){ state.tab = t; render(); },
+  expand(id){ state.expanded = state.expanded === id ? null : id; render(); },
+  setDir(room, dir){ state.dirs = Object.assign({}, state.dirs, { [room]: dir }); render(); },
+  tog(k){ state[k] = !state[k]; render(); },
+  openPro(){ state.proOpen = true; render(); },
+  closePro(){ state.proOpen = false; render(); }
+};
+
+const sw = on => ({ track: on ? '#4a9d6e' : '#d4dae0', knob: on ? 'translateX(20px)' : 'translateX(2px)' });
+
+function toggle(stateKey){
+  const s = sw(state[stateKey]);
+  return `<div onclick="A.tog('${stateKey}')" style="width:44px;height:26px;border-radius:20px;background:${s.track};position:relative;cursor:pointer;transition:background .2s;flex:none">
+    <div style="width:22px;height:22px;border-radius:50%;background:#fff;position:absolute;top:2px;left:0;transform:${s.knob};transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.25)"></div>
+  </div>`;
+}
+
+const statusBar = (color) => `<div style="display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:${color};padding:13px 18px 0">
+  <span>14:00</span>
+  <span style="display:flex;gap:6px" class="ms" >
+    <span style="font-size:17px">signal_cellular_alt</span><span style="font-size:17px">wifi</span><span style="font-size:17px">battery_full</span>
+  </span>
+</div>`;
+
+// ---------------- HEUTE ----------------
+function viewHeute(){
+  const locked = !state.proUnlocked;
+  const proUnlocked = state.proUnlocked;
+  const reminder = locked ? `
+    <div onclick="A.openPro()" style="position:relative;display:flex;align-items:center;gap:7px;margin-top:14px;background:rgba(255,255,255,.15);border-radius:13px;padding:10px 12px;cursor:pointer">
+      <span class="ms" style="font-size:18px">lock</span>
+      <span style="font:500 12.5px Outfit;flex:1">Pro: Erinnerung 1 Std vorher</span>
+      <span class="ms" style="font-size:18px">chevron_right</span>
+    </div>` : '';
+  const reminderActive = proUnlocked ? `
+    <div style="position:relative;display:flex;align-items:center;gap:7px;margin-top:14px;background:rgba(255,255,255,.15);border-radius:13px;padding:10px 12px">
+      <span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">notifications_active</span>
+      <span style="font:500 12.5px Outfit;flex:1">Erinnerung aktiv — wir melden uns 20:30</span>
+      <span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">check_circle</span>
+    </div>` : '';
+  const affiliate = state.showAffiliate ? `
+    <div style="background:#fff;border-radius:18px;padding:13px 15px;box-shadow:0 2px 10px rgba(25,45,65,.05);display:flex;align-items:center;gap:13px;cursor:pointer">
+      <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#eef1f4;display:flex;align-items:center;justify-content:center;color:#8a96a2;font-size:22px">roller_shades</div>
+      <div style="flex:1">
+        <div style="font:600 13px Outfit;color:#2a3742">Noch keine Rollos? Smarte ab 89 €</div>
+        <div style="font:400 11px Outfit;color:#9aa6b2;margin-top:1px">Auto-Abdunkeln spart bis 4° · Anzeige</div>
+      </div>
+      <span class="ms" style="font-size:20px;color:#c0c8d0">chevron_right</span>
+    </div>` : '';
+
+  return `<div>
+    <div style="position:relative;background:linear-gradient(168deg,#ffc478 0%,#ffd79a 28%,#fde6c5 56%,#f5f6f8 100%);padding:13px 18px 32px;overflow:hidden">
+      <div style="position:absolute;top:-44px;right:-32px;width:170px;height:170px;border-radius:50%;background:radial-gradient(circle,#fff6de 0%,rgba(255,246,222,0) 70%)"></div>
+      <div style="position:relative;display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:#7a5a2e">
+        <span>14:00</span>
+        <span style="display:flex;gap:6px" class="ms"><span style="font-size:17px">signal_cellular_alt</span><span style="font-size:17px">wifi</span><span style="font-size:17px">battery_full</span></span>
+      </div>
+      <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start;margin-top:14px">
+        <div>
+          <div style="display:flex;align-items:center;gap:4px;color:#5c4a2e;font:600 14px Outfit"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">location_on</span>Leipzig · Connewitz</div>
+          <div style="color:#8a6b3e;font:400 12.5px Outfit;margin-top:2px">Freitag, 26. Juni</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.55);border-radius:22px;padding:4px 11px 4px 5px">
+          <div class="ms" style="width:26px;height:26px;border-radius:50%;background:#c0673c;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-variation-settings:'FILL' 1">pets</div>
+          <span style="font:600 12.5px Outfit;color:#5c4a2e">Rex</span>
+        </div>
+      </div>
+      <div style="position:relative;display:flex;align-items:flex-end;gap:14px;margin-top:20px">
+        <div style="font:300 76px/0.85 Outfit;color:#3a2f20;letter-spacing:-3px">28°</div>
+        <div style="padding-bottom:9px">
+          <div style="font:600 16px Outfit;color:#4a3a22">Heiß & sonnig</div>
+          <div style="font:400 13px Outfit;color:#8a6b3e;margin-top:1px">Gefühlt 30° · UV 7 hoch</div>
+        </div>
+      </div>
+      <div style="position:relative;display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.6);border-radius:20px;padding:6px 11px;font:500 12.5px Outfit;color:#5c4a2e"><span class="ms" style="font-size:16px">home</span>24° innen</div>
+        <div style="display:flex;align-items:center;gap:5px;background:rgba(216,138,43,.18);border-radius:20px;padding:6px 11px;font:600 12.5px Outfit;color:#b5701d"><span class="ms" style="font-size:16px;font-variation-settings:'FILL' 1">do_not_disturb_on</span>Fenster zu halten</div>
+      </div>
+    </div>
+
+    <div style="margin-top:-20px;background:#f5f6f8;border-radius:24px 24px 0 0;padding:20px 16px 8px;display:flex;flex-direction:column;gap:14px;position:relative">
+
+      <div style="border-radius:22px;padding:18px;background:linear-gradient(140deg,#2aa6e0,#1c7ec2);color:#fff;box-shadow:0 10px 24px rgba(28,126,194,.30);position:relative;overflow:hidden">
+        <div style="position:absolute;right:-22px;top:-26px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.10)"></div>
+        <div style="position:relative;display:flex;align-items:center;gap:7px;font:600 12px Outfit;color:#dff1fb;text-transform:uppercase;letter-spacing:.6px"><span class="ms" style="font-size:18px">air</span>Nächstes Lüften</div>
+        <div style="position:relative;display:flex;align-items:baseline;gap:11px;margin-top:9px">
+          <div style="font:600 40px Outfit;letter-spacing:-1px">21:30</div>
+          <div style="font:500 13px Outfit;color:#dff1fb">in 7 Std 30 Min</div>
+        </div>
+        <div style="position:relative;font:400 13.5px/1.45 Outfit;color:#eaf6fd;margin-top:5px">Querlüften empfohlen — draußen kühlt auf 19°, dann wird's drinnen richtig kühl.</div>
+        ${reminder}${reminderActive}
+      </div>
+
+      <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 10px rgba(25,45,65,.05)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#fbecd6;display:flex;align-items:center;justify-content:center;color:#d98a2b;font-size:23px">roller_shades</div>
+          <div style="flex:1">
+            <div style="font:600 15px Outfit;color:#23303d">Jetzt abdunkeln</div>
+            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">Süd- & West-Rollos runter</div>
+          </div>
+          <span style="background:#fbecd6;color:#b5701d;font:700 10px Outfit;letter-spacing:.5px;padding:4px 9px;border-radius:20px">PRO</span>
+        </div>
+        <div style="height:1px;background:#eef1f4;margin:13px 0"></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="ms" style="font-size:20px;color:#93a0ac">cable</span>
+          <div style="flex:1">
+            <div style="font:500 13.5px Outfit;color:#37434f">Smarte Rollos automatisch</div>
+            <div style="font:400 11.5px Outfit;color:#9aa6b2">Mit Shelly / Bosch koppeln</div>
+          </div>
+          ${toggle('smart')}
+        </div>
+      </div>
+
+      <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 10px rgba(25,45,65,.05)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#f7e6da;display:flex;align-items:center;justify-content:center;color:#c0673c;font-size:23px">pets</div>
+          <div style="flex:1">
+            <div style="font:600 15px Outfit;color:#23303d">Rex · Gassi-Ampel</div>
+            <div style="font:400 12.5px Outfit;color:#7d8995;margin-top:1px">Asphalt ~42° · zu heiß für Pfoten</div>
+          </div>
+          <div style="width:13px;height:13px;border-radius:50%;background:#d8543f;animation:pulse 1.8s ease infinite"></div>
+        </div>
+        <div style="background:#fbf4f0;border-radius:13px;padding:11px 12px;margin-top:13px;display:flex;align-items:center;gap:9px">
+          <span class="ms" style="font-size:19px;color:#c0673c">schedule</span>
+          <span style="font:500 12.5px Outfit;color:#7a5340">Nächste gute Gassi-Zeit <b style="color:#469a6b;font-weight:600">ab 20:30</b></span>
+        </div>
+        <div style="height:1px;background:#eef1f4;margin:13px 0"></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="ms" style="font-size:20px;color:#1f8fcf">water_drop</span>
+          <div style="flex:1">
+            <div style="font:500 13.5px Outfit;color:#37434f">Trink-Alarm · alle 2 Std</div>
+            <div style="font:400 11.5px Outfit;color:#9aa6b2">Zuletzt 12:30 · nächste 14:30</div>
+          </div>
+          ${toggle('drink')}
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:11px;background:#e8edf6;border-radius:18px;padding:13px 15px">
+        <span class="ms" style="font-size:24px;color:#5b78a6;font-variation-settings:'FILL' 1">rainy</span>
+        <div style="flex:1">
+          <div style="font:600 13px Outfit;color:#3f4f68">Morgen 16:00 Regen erwartet</div>
+          <div style="font:400 11.5px Outfit;color:#7d8aa0;margin-top:1px">Wir erinnern dich rechtzeitig, die Fenster zu schließen.</div>
+        </div>
+      </div>
+
+      ${affiliate}
+    </div>
+  </div>`;
+}
+
+// ---------------- VERLAUF ----------------
+const KINDS = {
+  open:    { accent:'#1f8fcf', bg:'#e4f2fb', icon:'air' },
+  close:   { accent:'#d98a2b', bg:'#fbecd6', icon:'roller_shades' },
+  heat:    { accent:'#d98a2b', bg:'#fbecd6', icon:'wb_sunny' },
+  dog:     { accent:'#c0673c', bg:'#f7e6da', icon:'pets' },
+  dogGood: { accent:'#469a6b', bg:'#e6f3ec', icon:'pets' }
+};
+const RAW_DAY = [
+  { id:'morg', kind:'open',  st:'past', t:'05:30 – 07:30', title:'Morgenlüften', sub:'Kühle Nachtluft · 17° außen', detail:'Stoß- oder Querlüften für 20–30 Min. Holt die letzte kühle Luft rein, bevor die Sonne kommt.' },
+  { id:'zu',   kind:'close', st:'past', t:'ab 08:00', title:'Fenster zu & abdunkeln', sub:'Süd & West · Rollos runter', detail:'Die Sonne trifft jetzt Süd- und Westfenster. Geschlossen & abgedunkelt bleibt die Wohnung bis zu 4° kühler.' },
+  { id:'now',  kind:'heat',  st:'now', t:'jetzt · 14:00', title:'Hitze draußen halten', sub:'28° außen · 24° innen', detail:'Außen wärmer als innen — jedes offene Fenster heizt auf. Alles zu, Rollos unten. Nächstes Lüften ab 21:30.' },
+  { id:'g1',   kind:'dog',   st:'next', t:'18:00', title:'Gassi noch zu heiß', sub:'Asphalt ~42° · Pfoten-Risiko', detail:'7-Sekunden-Regel: Handrücken 7 Sek auf den Asphalt. Zu heiß für dich = zu heiß für Rex. Lieber Schatten & kurz.' },
+  { id:'g2',   kind:'dogGood', st:'upcoming', t:'ab 20:30', title:'Gute Gassi-Zeit', sub:'Abkühlung · Pfoten safe', detail:'Asphalt unter 30°, angenehme 23°. Ideal für die große Runde mit Rex.' },
+  { id:'luft', kind:'open',  st:'upcoming', t:'21:30 – 05:00', title:'Großes Lüften', sub:'Außen 19° < innen 24°', detail:'Jetzt kühlt die Außenluft effektiv runter. Querlüften über Nacht bringt bis zu 5° Abkühlung für morgen.' }
+];
+
+function viewVerlauf(){
+  const items = RAW_DAY.map(it => {
+    const k = KINDS[it.kind];
+    const now = it.st === 'now';
+    const done = it.st === 'past';
+    const open = state.expanded === it.id;
+    const dot = (done || now) ? k.accent : '#fff';
+    const timeColor = now ? k.accent : '#93a0ac';
+    const ring = now ? ('0 0 0 1.5px ' + k.accent) : '0 1px 3px rgba(20,40,60,.05)';
+    const detail = open ? `<div style="font:400 12.5px/1.5 Outfit;color:#6b7682;margin-top:11px;padding-top:11px;border-top:1px solid #eef1f4">${it.detail}</div>` : '';
+    return `<div onclick="A.expand('${it.id}')" style="display:flex;gap:13px;cursor:pointer">
+      <div style="position:relative;width:22px;flex:none;display:flex;justify-content:center">
+        <div style="position:absolute;top:0;bottom:0;width:2px;background:#e5e9ed"></div>
+        <div style="position:relative;width:14px;height:14px;border-radius:50%;background:${dot};border:2.5px solid ${k.accent};margin-top:19px;z-index:1"></div>
+      </div>
+      <div style="flex:1;background:#fff;border-radius:16px;padding:13px 14px;margin-bottom:11px;box-shadow:${ring}">
+        <div style="display:flex;align-items:center;gap:11px">
+          <div class="ms" style="width:37px;height:37px;border-radius:11px;background:${k.bg};color:${k.accent};display:flex;align-items:center;justify-content:center;font-size:20px;font-variation-settings:'FILL' 1">${k.icon}</div>
+          <div style="flex:1">
+            <div style="font:600 14px Outfit;color:#26333f">${it.title}</div>
+            <div style="font:400 12px Outfit;color:#83909c">${it.sub}</div>
+          </div>
+          <div style="font:600 12px Outfit;color:${timeColor};text-align:right;white-space:nowrap">${it.t}</div>
+        </div>
+        ${detail}
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div>
+    ${statusBar('#3a4651')}
+    <div style="padding:14px 18px 0">
+      <div style="font:600 25px Outfit;color:#23303d">Tagesverlauf</div>
+      <div style="font:400 13px Outfit;color:#7d8995;margin-top:1px">Fr, 26. Juni · auf deine Fenster abgestimmt</div>
+    </div>
+    <div style="display:flex;gap:7px;padding:14px 18px 8px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:5px;font:500 11.5px Outfit;color:#5b6772"><span style="width:9px;height:9px;border-radius:50%;background:#1f8fcf"></span>Lüften</div>
+      <div style="display:flex;align-items:center;gap:5px;font:500 11.5px Outfit;color:#5b6772;margin-left:6px"><span style="width:9px;height:9px;border-radius:50%;background:#d98a2b"></span>Zu & abdunkeln</div>
+      <div style="display:flex;align-items:center;gap:5px;font:500 11.5px Outfit;color:#5b6772;margin-left:6px"><span style="width:9px;height:9px;border-radius:50%;background:#c0673c"></span>Hund</div>
+    </div>
+    <div style="padding:4px 16px 20px">
+      ${items}
+      <div style="text-align:center;font:400 11.5px Outfit;color:#aab4be;margin-top:2px">Tippen für Details · Zeiten passen sich live ans Wetter an</div>
+    </div>
+  </div>`;
+}
+
+// ---------------- HUND ----------------
+function viewHund(){
+  return `<div>
+    ${statusBar('#3a4651')}
+    <div style="padding:14px 18px 0;display:flex;align-items:center;gap:11px">
+      <div class="ms" style="width:44px;height:44px;border-radius:50%;background:#c0673c;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-variation-settings:'FILL' 1">pets</div>
+      <div>
+        <div style="font:600 24px Outfit;color:#23303d;line-height:1.05">Rex</div>
+        <div style="font:400 12.5px Outfit;color:#7d8995">Labrador · 4 Jahre · Hitze-empfindlich</div>
+      </div>
+    </div>
+
+    <div style="padding:16px 16px 8px;display:flex;flex-direction:column;gap:14px">
+      <div style="border-radius:22px;padding:18px;background:linear-gradient(140deg,#cc6e42,#a8542f);color:#fff;box-shadow:0 10px 24px rgba(168,84,47,.28)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font:600 12px Outfit;text-transform:uppercase;letter-spacing:.6px;color:#fbe2d4">Gassi-Ampel</div>
+            <div style="font:600 25px Outfit;margin-top:5px">Lieber warten</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font:500 13px Outfit;color:#fbe2d4"><span class="ms" style="font-size:18px;font-variation-settings:'FILL' 1">local_fire_department</span>Asphalt zu heiß · ~42°</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px;background:rgba(0,0,0,.14);padding:9px;border-radius:30px">
+            <span style="width:13px;height:13px;border-radius:50%;background:#ff5b40;box-shadow:0 0 9px #ff5b40"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.28)"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.28)"></span>
+          </div>
+        </div>
+        <div style="background:rgba(255,255,255,.15);border-radius:14px;padding:12px 13px;margin-top:15px">
+          <div style="display:flex;align-items:center;gap:8px;font:600 13px Outfit"><span class="ms" style="font-size:19px">schedule</span>Gute Gassi-Zeit ab 20:30</div>
+          <div style="font:400 12px Outfit;color:#fbe2d4;margin-top:4px;padding-left:27px">In 6 Std 30 Min · dann Asphalt 28°, Luft 23°. Wir schicken dir eine Erinnerung.</div>
+        </div>
+      </div>
+
+      <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 10px rgba(25,45,65,.05);display:flex;align-items:flex-start;gap:12px">
+        <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#fbecd6;display:flex;align-items:center;justify-content:center;color:#d98a2b;font-size:22px">device_thermostat</div>
+        <div style="flex:1">
+          <div style="font:600 14px Outfit;color:#26333f">7-Sekunden-Pfotentest</div>
+          <div style="font:400 12.5px/1.45 Outfit;color:#7d8995;margin-top:3px">Halt deinen Handrücken 7 Sekunden auf den Asphalt. Zu heiß für dich = zu heiß für Rex' Pfoten. Jetzt: lieber Schatten & kurze Runden.</div>
+        </div>
+      </div>
+
+      <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 10px rgba(25,45,65,.05)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="ms" style="width:42px;height:42px;border-radius:13px;background:#e4f2fb;display:flex;align-items:center;justify-content:center;color:#1f8fcf;font-size:23px;font-variation-settings:'FILL' 1">water_drop</div>
+          <div style="flex:1">
+            <div style="font:600 15px Outfit;color:#23303d">Trink-Alarm</div>
+            <div style="font:400 12px Outfit;color:#7d8995;margin-top:1px">An heißen Tagen alle 2 Std</div>
+          </div>
+          ${toggle('drink')}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <div style="flex:1;background:#f4f6f8;border-radius:13px;padding:11px;text-align:center">
+            <div style="font:400 11px Outfit;color:#9aa6b2">Zuletzt</div>
+            <div style="font:600 16px Outfit;color:#26333f;margin-top:2px">12:30</div>
+          </div>
+          <div style="flex:1;background:#e4f2fb;border-radius:13px;padding:11px;text-align:center">
+            <div style="font:400 11px Outfit;color:#6aa3c8">Nächste</div>
+            <div style="font:600 16px Outfit;color:#1f8fcf;margin-top:2px">14:30</div>
+          </div>
+          <div style="flex:1;background:#f4f6f8;border-radius:13px;padding:11px;text-align:center">
+            <div style="font:400 11px Outfit;color:#9aa6b2">Heute</div>
+            <div style="font:600 16px Outfit;color:#26333f;margin-top:2px">3×</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---------------- PROFIL ----------------
+const DIR_LABEL = { N:'Nord', O:'Ost', S:'Süd', W:'West' };
+const SUN_INFO  = { N:'kühl · kaum Sonne', O:'Morgensonne 6–11 Uhr', S:'volle Sonne 11–16 Uhr', W:'Abendsonne 15–20 Uhr' };
+const ROOM_DEFS = [
+  ['wohn','Wohnzimmer','weekend'],
+  ['schlaf','Schlafzimmer','king_bed'],
+  ['kueche','Küche','countertops']
+];
+const AFFILIATE = [
+  { icon:'roller_shades', title:'Smarte Rollos', sub:'Auto-Abdunkeln nach Sonnenstand', price:'ab 89 €' },
+  { icon:'device_thermostat', title:'Wetterstation', sub:'Innen- & Außentemp live messen', price:'ab 49 €' },
+  { icon:'bolt', title:'Balkonkraftwerk', sub:'600 W für Ventilator & Klimagerät', price:'ab 399 €' }
+];
+
+function viewProfil(){
+  const rooms = ROOM_DEFS.map(([key,name,icon]) => {
+    const cur = DIR_LABEL[state.dirs[key]];
+    const sun = SUN_INFO[state.dirs[key]];
+    const opts = ['N','O','S','W'].map(v => {
+      const active = state.dirs[key] === v;
+      const bg = active ? '#1f8fcf' : '#f1f4f7';
+      const color = active ? '#fff' : '#5b6772';
+      const border = active ? '#1f8fcf' : '#eceff2';
+      return `<div onclick="A.setDir('${key}','${v}')" style="flex:1;text-align:center;padding:9px 0;border-radius:11px;font:600 13px Outfit;cursor:pointer;background:${bg};color:${color};border:1.5px solid ${border};transition:all .15s">${v}</div>`;
+    }).join('');
+    return `<div style="background:#fff;border-radius:16px;padding:14px;margin-bottom:10px;box-shadow:0 2px 10px rgba(25,45,65,.05)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ms" style="font-size:22px;color:#7d8995">${icon}</span>
+        <div style="flex:1">
+          <div style="font:600 14px Outfit;color:#26333f">${name}</div>
+          <div style="font:400 11.5px Outfit;color:#9aa6b2">${cur} · ${sun}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">${opts}</div>
+    </div>`;
+  }).join('');
+
+  const affiliateSec = state.showAffiliate ? `
+    <div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 9px"><span style="font:600 12px Outfit;color:#9aa6b2;text-transform:uppercase;letter-spacing:.6px">Empfehlungen</span><span style="font:400 10.5px Outfit;color:#b5bfc8">Anzeige</span></div>
+      <div style="background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(25,45,65,.05);overflow:hidden">
+        ${AFFILIATE.map((a,i) => `
+          <div style="display:flex;align-items:center;gap:13px;padding:14px;border-top:1px solid ${i===0?'transparent':'#eef1f4'};cursor:pointer">
+            <div class="ms" style="width:40px;height:40px;border-radius:12px;background:#f1f4f7;display:flex;align-items:center;justify-content:center;color:#7d8995;font-size:22px">${a.icon}</div>
+            <div style="flex:1"><div style="font:600 13.5px Outfit;color:#2a3742">${a.title}</div><div style="font:400 11.5px Outfit;color:#9aa6b2">${a.sub}</div></div>
+            <div style="text-align:right"><div style="font:600 12.5px Outfit;color:#469a6b">${a.price}</div><span class="ms" style="font-size:18px;color:#c0c8d0">chevron_right</span></div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  return `<div>
+    ${statusBar('#3a4651')}
+    <div style="padding:14px 18px 0">
+      <div style="font:600 25px Outfit;color:#23303d">Profil & Setup</div>
+      <div style="font:400 13px Outfit;color:#7d8995;margin-top:1px">So weiß AirDog, wann gelüftet wird</div>
+    </div>
+
+    <div style="padding:16px 16px 8px;display:flex;flex-direction:column;gap:18px">
+      <div>
+        <div style="font:600 12px Outfit;color:#9aa6b2;text-transform:uppercase;letter-spacing:.6px;margin:0 4px 9px">Fensterrichtung pro Raum</div>
+        ${rooms}
+      </div>
+
+      <div>
+        <div style="font:600 12px Outfit;color:#9aa6b2;text-transform:uppercase;letter-spacing:.6px;margin:0 4px 9px">Smart Home & Hinweise</div>
+        <div style="background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(25,45,65,.05);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px">
+            <span class="ms" style="font-size:22px;color:#469a6b">window</span>
+            <div style="flex:1"><div style="font:600 13.5px Outfit;color:#37434f">Smarte Fensteröffner</div><div style="font:400 11.5px Outfit;color:#9aa6b2">Automatisch öffnen & schließen</div></div>
+            ${toggle('smart')}
+          </div>
+          <div style="height:1px;background:#eef1f4;margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:14px">
+            <span class="ms" style="font-size:22px;color:#5b78a6">rainy</span>
+            <div style="flex:1"><div style="font:600 13.5px Outfit;color:#37434f">Regen-Erinnerung</div><div style="font:400 11.5px Outfit;color:#9aa6b2">Fenster schließen, bevor's regnet</div></div>
+            ${toggle('rain')}
+          </div>
+          <div style="height:1px;background:#eef1f4;margin:0 14px"></div>
+          <div onclick="A.openPro()" style="display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer">
+            <span class="ms" style="font-size:22px;color:#b5701d">notifications_active</span>
+            <div style="flex:1"><div style="font:600 13.5px Outfit;color:#37434f">1 Std Vorankündigung</div><div style="font:400 11.5px Outfit;color:#9aa6b2">Vor jedem Lüften-Fenster</div></div>
+            <span style="background:#fbecd6;color:#b5701d;font:700 10px Outfit;letter-spacing:.5px;padding:4px 9px;border-radius:20px">PRO</span>
+          </div>
+        </div>
+      </div>
+
+      <div onclick="A.openPro()" style="border-radius:20px;padding:18px;background:linear-gradient(135deg,#3b6ea5,#2a4d7a);color:#fff;cursor:pointer;box-shadow:0 10px 24px rgba(42,77,122,.28);position:relative;overflow:hidden">
+        <div style="position:absolute;right:-18px;bottom:-24px;font-size:120px;color:rgba(255,255,255,.07)" class="ms" >workspace_premium</div>
+        <div style="position:relative;display:flex;align-items:center;gap:8px;font:700 14px Outfit"><span class="ms" style="font-size:20px;font-variation-settings:'FILL' 1">workspace_premium</span>AirDog Pro</div>
+        <div style="position:relative;font:400 13px/1.45 Outfit;color:#dbe7f3;margin-top:7px">Abdunkelungs-Assistent nach Sonnenstand + Vorankündigung 1 Std vorher. Werbefrei.</div>
+        <div style="position:relative;display:flex;align-items:center;gap:10px;margin-top:14px">
+          <span style="background:#fff;color:#2a4d7a;font:600 13px Outfit;padding:8px 16px;border-radius:20px">Pro testen</span>
+          <span style="font:400 12px Outfit;color:#bcd0e6">ab 2,99 € / Monat</span>
+        </div>
+      </div>
+
+      ${affiliateSec}
+
+      <div style="text-align:center;font:400 11px Outfit;color:#b5bfc8;padding:4px 0 2px">AirDog · v1.0 · Standort: Leipzig</div>
+    </div>
+  </div>`;
+}
+
+// ---------------- BOTTOM NAV ----------------
+function bottomNav(){
+  const items = [
+    ['heute','Heute','wb_sunny'],
+    ['verlauf','Verlauf','calendar_today'],
+    ['hund','Hund','pets'],
+    ['profil','Profil','tune']
+  ].map(([key,label,icon]) => {
+    const active = state.tab === key;
+    const color = active ? '#1f8fcf' : '#9aa6b2';
+    const fill = active ? 1 : 0;
+    return `<div onclick="A.setTab('${key}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+      <span class="ms" style="font-size:25px;line-height:1;color:${color};font-variation-settings:'FILL' ${fill}">${icon}</span>
+      <span style="font:500 11px Outfit;color:${color}">${label}</span>
+    </div>`;
+  }).join('');
+  return `<div style="position:absolute;left:0;right:0;bottom:0;height:76px;background:rgba(255,255,255,.93);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid #e9ecf0;display:flex;padding:9px 12px 16px">${items}</div>`;
+}
+
+// ---------------- PRO SHEET ----------------
+const PRO_FEATURES = [
+  { icon:'roller_shades', title:'Abdunkelungs-Assistent', sub:'Rollo-Plan nach Fensterrichtung & Sonnenstand — Raum für Raum.' },
+  { icon:'notifications_active', title:'1 Std Vorankündigung', sub:'Erinnerung, bevor das nächste Lüften-Fenster startet.' },
+  { icon:'block', title:'Werbefrei', sub:'Keine Empfehlungen, keine Banner — volle Ruhe.' }
+];
+function proSheet(){
+  if(!state.proOpen) return '';
+  const feats = PRO_FEATURES.map(f => `
+    <div style="display:flex;align-items:flex-start;gap:11px">
+      <div class="ms" style="width:34px;height:34px;border-radius:10px;background:#e4eef8;display:flex;align-items:center;justify-content:center;color:#3b6ea5;flex:none;font-size:19px">${f.icon}</div>
+      <div style="flex:1"><div style="font:600 14px Outfit;color:#26333f">${f.title}</div><div style="font:400 12px/1.4 Outfit;color:#7d8995;margin-top:1px">${f.sub}</div></div>
+    </div>`).join('');
+  return `
+    <div onclick="A.closePro()" style="position:absolute;inset:0;background:rgba(20,30,45,.48);z-index:50;display:flex;align-items:flex-end;animation:fadein .2s ease"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;z-index:51;background:#fff;border-radius:26px 26px 0 0;padding:10px 20px 26px;animation:sheet .32s cubic-bezier(.2,.8,.2,1) both">
+      <div style="width:40px;height:5px;border-radius:3px;background:#e1e5ea;margin:4px auto 16px"></div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="ms" style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#3b6ea5,#2a4d7a);display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px;font-variation-settings:'FILL' 1">workspace_premium</div>
+        <div><div style="font:700 18px Outfit;color:#23303d">AirDog Pro</div><div style="font:400 12px Outfit;color:#7d8995">Hol das Maximum aus deiner Wohnung</div></div>
+      </div>
+      <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">${feats}</div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <div style="flex:1;border:1.5px solid #e4e8ec;border-radius:14px;padding:12px;text-align:center"><div style="font:400 11px Outfit;color:#9aa6b2">Monatlich</div><div style="font:600 17px Outfit;color:#26333f;margin-top:2px">2,99 €</div></div>
+        <div style="flex:1;border:1.5px solid #2a4d7a;border-radius:14px;padding:12px;text-align:center;background:#f3f7fc;position:relative"><div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#2a4d7a;color:#fff;font:600 9.5px Outfit;padding:2px 8px;border-radius:10px;white-space:nowrap">−44%</div><div style="font:400 11px Outfit;color:#5b6772">Jährlich</div><div style="font:600 17px Outfit;color:#2a4d7a;margin-top:2px">19,99 €</div></div>
+      </div>
+      <div onclick="A.closePro()" style="margin-top:16px;background:linear-gradient(135deg,#3b6ea5,#2a4d7a);color:#fff;text-align:center;font:600 15px Outfit;padding:15px;border-radius:16px;cursor:pointer;box-shadow:0 8px 20px rgba(42,77,122,.3)">7 Tage gratis testen</div>
+      <div onclick="A.closePro()" style="text-align:center;font:500 13px Outfit;color:#9aa6b2;margin-top:13px;cursor:pointer">Vielleicht später</div>
+    </div>`;
+}
+
+// ---------------- RENDER ----------------
+const VIEWS = { heute: viewHeute, verlauf: viewVerlauf, hund: viewHund, profil: viewProfil };
+
+function render(){
+  const body = VIEWS[state.tab]();
+  document.getElementById('app').innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 100% at 50% 0%,#eef1f4,#e3e7ec);padding:26px;font-family:Outfit,system-ui,sans-serif">
+      <div style="width:390px;height:844px;background:#f5f6f8;border-radius:42px;overflow:hidden;position:relative;box-shadow:0 36px 80px rgba(20,35,55,.24),0 0 0 1px rgba(0,0,0,.03)">
+        <div class="scrl" style="height:100%;overflow-y:auto">
+          ${body}
+          <div style="height:88px"></div>
+        </div>
+        ${bottomNav()}
+        ${proSheet()}
+      </div>
+    </div>`;
+}
+
+render();
+</script>
+</body>
+</html>

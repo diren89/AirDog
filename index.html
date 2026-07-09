@@ -52,6 +52,8 @@ const state = {
   dogWalkAirTemp: null,
   rainForecast: null,
   locOpen: false,
+  locQuery: '',      // current search input text
+  locResults: null,  // null=show CITIES, []=no matches, [...]=matches
   // pollen (live from air quality API)
   pollenData: [],
   pollenBadge: { bg:'#eef1f4', color:'#9aa6b2', level:'…' },
@@ -116,6 +118,10 @@ const CITIES = [
   { name:'Hamburg',          region:'Hamburg',              lat:53.5753, lon:10.0153 },
   { name:'Köln',             region:'Nordrhein-Westfalen',  lat:50.9333, lon:6.9500  }
 ];
+
+let locSearchTimer = null;
+let locSearchToken = 0;
+function escAttr(s){ return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
 
 function hhmm(date){ return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`; }
 function hh00(date){ return `${String(date.getHours()).padStart(2,'0')}:00`; }
@@ -251,6 +257,22 @@ async function fetchWeather(){
   });
 }
 
+async function searchNominatim(query){
+  const myToken = ++locSearchToken;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&accept-language=de&countrycodes=de&limit=6&addressdetails=1`);
+    const data = await res.json();
+    if(myToken !== locSearchToken) return; // superseded by newer keystroke
+    state.locResults = data.map(d => ({
+      name: d.address?.city || d.address?.town || d.address?.village || d.address?.municipality || (d.display_name||'').split(',')[0],
+      region: d.address?.state || '',
+      lat: parseFloat(d.lat),
+      lon: parseFloat(d.lon)
+    }));
+    render();
+  } catch(e){ /* silent fail, keep last good list */ }
+}
+
 // ---- actions ----
 const A = {
   setTab(t){ state.tab = t; render(); },
@@ -259,10 +281,17 @@ const A = {
   tog(k){ state[k] = !state[k]; render(); },
   openPro(){ state.proOpen = true; render(); },
   closePro(){ state.proOpen = false; render(); },
-  openLoc(){ state.locOpen = true; render(); },
+  openLoc(){ state.locOpen = true; state.locQuery = ''; state.locResults = null; render(); },
   closeLoc(){ state.locOpen = false; render(); },
   pickCity(name, lat, lon){ state.locOpen = false; render(); fetchWeatherForCoords(lat, lon, name).catch(()=>{}); },
-  useGps(){ state.locOpen = false; render(); fetchWeather().catch(()=>{}); }
+  useGps(){ state.locOpen = false; render(); fetchWeather().catch(()=>{}); },
+  searchLoc(q){
+    state.locQuery = q;
+    clearTimeout(locSearchTimer);
+    const query = q.trim();
+    if(query.length < 2){ state.locResults = null; render(); return; }
+    locSearchTimer = setTimeout(() => searchNominatim(query), 350);
+  }
 };
 
 const sw = on => ({ track: on ? '#4a9d6e' : '#d4dae0', knob: on ? 'translateX(20px)' : 'translateX(2px)' });
@@ -775,11 +804,14 @@ function proSheet(){
 // ---------------- LOC SHEET ----------------
 function locSheet(){
   if(!state.locOpen) return '';
-  const rows = CITIES.map(c => {
-    const active = state.locationName === c.name;
-    const check = active ? '<span class="ms" style="font-size:21px;color:#1f8fcf">check_circle</span>' : '';
-    return '<div onclick="A.pickCity(\'' + c.name + '\',' + c.lat + ',' + c.lon + ')" style="display:flex;align-items:center;gap:11px;padding:13px 4px;cursor:pointer;border-bottom:1px solid #f3f5f7"><span class="ms" style="font-size:20px;color:#93a0ac">location_on</span><div style="flex:1"><div style="font:600 14px Outfit;color:#26333f">' + c.name + '</div><div style="font:400 11.5px Outfit;color:#9aa6b2">' + c.region + '</div></div>' + check + '</div>';
-  }).join('');
+  const list = state.locResults !== null ? state.locResults : CITIES;
+  const rows = list.length === 0
+    ? `<div style="text-align:center;padding:24px 8px;font:400 13px Outfit;color:#9aa6b2">Keine Ergebnisse für „${escAttr(state.locQuery)}"</div>`
+    : list.map(c => {
+        const active = state.locationName === c.name;
+        const check = active ? '<span class="ms" style="font-size:21px;color:#1f8fcf">check_circle</span>' : '';
+        return '<div onclick="A.pickCity(\'' + escAttr(c.name) + '\',' + c.lat + ',' + c.lon + ')" style="display:flex;align-items:center;gap:11px;padding:13px 4px;cursor:pointer;border-bottom:1px solid #f3f5f7"><span class="ms" style="font-size:20px;color:#93a0ac">location_on</span><div style="flex:1"><div style="font:600 14px Outfit;color:#26333f">' + c.name + '</div><div style="font:400 11.5px Outfit;color:#9aa6b2">' + c.region + '</div></div>' + check + '</div>';
+      }).join('');
   return `
     <div onclick="A.closeLoc()" style="position:absolute;inset:0;background:rgba(20,30,45,.48);z-index:50;animation:fadein .2s ease"></div>
     <div style="position:absolute;left:0;right:0;bottom:0;z-index:51;background:#fff;border-radius:26px 26px 0 0;padding:10px 20px 26px;animation:sheet .32s cubic-bezier(.2,.8,.2,1) both;max-height:80%;display:flex;flex-direction:column">
@@ -790,7 +822,11 @@ function locSheet(){
       </div>
       <div style="display:flex;align-items:center;gap:9px;background:#f1f4f7;border-radius:14px;padding:12px 14px;margin-top:14px;flex:none">
         <span class="ms" style="font-size:20px;color:#93a0ac">search</span>
-        <span style="font:400 14px Outfit;color:#aab4be">Stadt oder PLZ suchen…</span>
+        <input id="locSearchInput" type="text" autocomplete="off"
+          value="${escAttr(state.locQuery)}"
+          placeholder="Stadt oder PLZ suchen…"
+          oninput="A.searchLoc(this.value)"
+          style="border:none;background:transparent;outline:none;flex:1;font:400 14px Outfit;color:#26333f">
       </div>
       <div onclick="A.useGps()" style="display:flex;align-items:center;gap:11px;padding:13px 2px;margin-top:8px;cursor:pointer;flex:none">
         <span class="ms" style="font-size:21px;color:#1f8fcf;font-variation-settings:'FILL' 1">my_location</span>
@@ -805,7 +841,12 @@ function locSheet(){
 const VIEWS = { heute: viewHeute, verlauf: viewVerlauf, hund: viewHund, profil: viewProfil };
 
 function render(){
-  document.getElementById('app').innerHTML = `
+  const app = document.getElementById('app');
+  const active = document.activeElement;
+  const wasFocused = state.locOpen && active && active.id === 'locSearchInput';
+  const caret = wasFocused ? active.selectionStart : null;
+
+  app.innerHTML = `
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 100% at 50% 0%,#eef1f4,#e3e7ec);padding:26px;font-family:Outfit,system-ui,sans-serif">
       <div style="width:390px;height:844px;background:#f5f6f8;border-radius:42px;overflow:hidden;position:relative;box-shadow:0 36px 80px rgba(20,35,55,.24),0 0 0 1px rgba(0,0,0,.03)">
         <div class="scrl" style="height:100%;overflow-y:auto">
@@ -817,6 +858,11 @@ function render(){
         ${locSheet()}
       </div>
     </div>`;
+
+  if(wasFocused){
+    const input = document.getElementById('locSearchInput');
+    if(input){ input.focus(); try{ input.setSelectionRange(caret, caret); }catch(e){} }
+  }
 }
 
 // ---------------- BOOT ----------------

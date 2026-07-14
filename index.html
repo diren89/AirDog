@@ -20,6 +20,7 @@
   @media (max-width: 600px){
     .phone-wrap{ padding:0 !important; min-height:100dvh !important; }
     .phone-frame{ width:100% !important; height:100dvh !important; border-radius:0 !important; box-shadow:none !important; }
+    .statusbar{ display:none !important; }
   }
 </style>
 </head>
@@ -307,7 +308,7 @@ function toggle(stateKey){
   </div>`;
 }
 
-const statusBar = (color) => `<div style="display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:${color};padding:13px 18px 0">
+const statusBar = (color) => `<div class="statusbar" style="display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:${color};padding:13px 18px 0">
   <span>${state.time}</span>
   <span style="display:flex;gap:6px" class="ms">
     <span style="font-size:17px">signal_cellular_alt</span><span style="font-size:17px">wifi</span><span style="font-size:17px">battery_full</span>
@@ -372,7 +373,7 @@ function viewHeute(){
   return `<div>
     <div style="position:relative;background:linear-gradient(168deg,#ffc478 0%,#ffd79a 28%,#fde6c5 56%,#f5f6f8 100%);padding:13px 18px 32px;overflow:hidden">
       <div style="position:absolute;top:-44px;right:-32px;width:170px;height:170px;border-radius:50%;background:radial-gradient(circle,#fff6de 0%,rgba(255,246,222,0) 70%)"></div>
-      <div style="position:relative;display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:#7a5a2e">
+      <div class="statusbar" style="position:relative;display:flex;justify-content:space-between;align-items:center;font:600 13px Outfit;color:#7a5a2e">
         <span>${state.time}</span>
         <span style="display:flex;gap:6px" class="ms"><span style="font-size:17px">signal_cellular_alt</span><span style="font-size:17px">wifi</span><span style="font-size:17px">battery_full</span></span>
       </div>

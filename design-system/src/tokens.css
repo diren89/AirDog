@@ -1,4 +1,6 @@
 /* AirDog design tokens — extracted 1:1 from index.html / auth.html inline styles */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,-25..200&display=swap');
+
 :root{
   /* font */
   --ds-font-family: Outfit, system-ui, sans-serif;

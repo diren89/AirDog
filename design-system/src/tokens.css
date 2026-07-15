@@ -1,0 +1,87 @@
+/* AirDog design tokens — extracted 1:1 from index.html / auth.html inline styles */
+:root{
+  /* font */
+  --ds-font-family: Outfit, system-ui, sans-serif;
+  --ds-icon-family: 'Material Symbols Rounded';
+
+  /* radii */
+  --ds-radius-badge: 20px;
+  --ds-radius-card-lg: 20px;
+  --ds-radius-card-sm: 16px;
+  --ds-radius-icon-lg: 13px;
+  --ds-radius-icon-md: 12px;
+  --ds-radius-icon-sm: 11px;
+  --ds-radius-icon-xs: 10px;
+  --ds-radius-button: 16px;
+  --ds-radius-sheet: 26px;
+  --ds-radius-input: 14px;
+  --ds-radius-segment: 15px;
+  --ds-radius-segment-option: 11px;
+  --ds-radius-checkbox: 7px;
+
+  /* shadows */
+  --ds-shadow-card: 0 2px 10px rgba(25,45,65,.05);
+  --ds-shadow-hero-blue: 0 10px 24px rgba(28,126,194,.30);
+  --ds-shadow-hero-success: 0 10px 24px rgba(45,122,82,.28);
+  --ds-shadow-hero-danger: 0 10px 24px rgba(168,84,47,.28);
+  --ds-shadow-hero-pro: 0 10px 24px rgba(42,77,122,.28);
+  --ds-shadow-cta-pro: 0 8px 20px rgba(42,77,122,.3);
+  --ds-shadow-cta-auth: 0 10px 22px rgba(28,126,194,.3);
+  --ds-shadow-thumb: 0 2px 6px rgba(20,40,60,.10);
+  --ds-shadow-timeline-default: 0 1px 3px rgba(20,40,60,.05);
+  --ds-shadow-knob: 0 1px 3px rgba(0,0,0,.25);
+
+  /* semantic severity colors (success / warning / danger ramp) */
+  --ds-color-success-bg: rgba(70,154,107,.18);
+  --ds-color-success-fg: #2e7d52;
+  --ds-color-success-solid: #4a9d6e;
+  --ds-color-warning-bg: rgba(216,138,43,.18);
+  --ds-color-warning-fg: #b5701d;
+  --ds-color-warning-solid: #d98a2b;
+  --ds-color-danger-solid: #d8543f;
+  --ds-color-danger-dark: #a0222a;
+
+  /* pollen/tick severity ramp */
+  --ds-color-severity-1: #4a9d6e;
+  --ds-color-severity-2: #a3c14a;
+  --ds-color-severity-3: #e0c23a;
+  --ds-color-severity-4: #e08a2b;
+  --ds-color-severity-5: #d8543f;
+
+  /* neutrals */
+  --ds-color-surface: #fff;
+  --ds-color-track-off: #d4dae0;
+  --ds-color-text-primary: #23303d;
+  --ds-color-text-secondary: #7d8995;
+  --ds-color-text-muted: #9aa6b2;
+  --ds-color-border: #e4e8ec;
+  --ds-color-border-light: #eceff2;
+  --ds-color-divider: #eef1f4;
+  --ds-color-placeholder: #aab4be;
+
+  /* brand accent */
+  --ds-color-accent: #1f8fcf;
+  --ds-color-accent-bg: #e4f2fb;
+
+  /* icon tint pairs (bg / fg) */
+  --ds-tint-heat-bg: #fbecd6;
+  --ds-tint-heat-fg: #d98a2b;
+  --ds-tint-dog-bg: #f7e6da;
+  --ds-tint-dog-fg: #c0673c;
+  --ds-tint-pollen-bg: #eaf3e2;
+  --ds-tint-pollen-fg: #6a9a3e;
+  --ds-tint-tick-bg: #f2e7da;
+  --ds-tint-tick-fg: #a06a35;
+  --ds-tint-water-bg: #e4f2fb;
+  --ds-tint-water-fg: #1f8fcf;
+
+  /* gradients */
+  --ds-gradient-blue: linear-gradient(140deg,#2aa6e0,#1c7ec2);
+  --ds-gradient-success: linear-gradient(140deg,#3a9e6a,#2d7a52);
+  --ds-gradient-danger: linear-gradient(140deg,#cc6e42,#a8542f);
+  --ds-gradient-pro: linear-gradient(135deg,#3b6ea5,#2a4d7a);
+
+  /* overlay/sheet */
+  --ds-color-overlay: rgba(20,30,45,.48);
+  --ds-color-handle: #e1e5ea;
+}

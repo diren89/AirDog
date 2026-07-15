@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>AirDog Design System — QA Gallery</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,-25..200&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../dist/ds-bundle.css">
+<style>
+  body{margin:0;background:#eef1f4;font-family:Outfit,system-ui,sans-serif;padding:24px}
+  .section{background:#f5f6f8;border-radius:16px;padding:20px;margin-bottom:20px;position:relative;min-height:60px}
+  h2{font:600 14px Outfit;color:#23303d;margin:0 0 12px;text-transform:uppercase;letter-spacing:.5px}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .frame{width:390px;position:relative;background:#f5f6f8;border-radius:16px;overflow:hidden;height:200px}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime"
+  }
+}
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+  import React, { useState } from 'react';
+  import { createRoot } from 'react-dom/client';
+  import {
+    Toggle, Card, Badge, BottomNav, IconSquare, Button, BottomSheet, SegmentedControl, FormInput, TimelineItem
+  } from '../dist/ds-bundle.js';
+
+  function Gallery(){
+    const [toggleOn, setToggleOn] = useState(true);
+    const [tab, setTab] = useState('heute');
+    const [seg1, setSeg1] = useState('login');
+    const [seg2, setSeg2] = useState('S');
+    const [sheetOpen, setSheetOpen] = useState(false);
+    const [timelineOpen, setTimelineOpen] = useState(true);
+
+    return React.createElement('div', null,
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '1. Toggle'),
+        React.createElement('div', {className:'row'},
+          React.createElement(Toggle, {checked: toggleOn, onChange: setToggleOn, label:'demo'}),
+          React.createElement(Toggle, {checked: false, onChange: ()=>{}, label:'off'}),
+          React.createElement(Toggle, {checked: true, onChange: ()=>{}, disabled: true, label:'disabled-on'})
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '2. Card'),
+        React.createElement('div', {className:'row'},
+          React.createElement(Card, {size:'default'}, 'Default card'),
+          React.createElement(Card, {size:'compact'}, 'Compact card'),
+          React.createElement(Card, {tone:'blue'}, 'Blue hero'),
+          React.createElement(Card, {tone:'success'}, 'Success hero'),
+          React.createElement(Card, {tone:'danger'}, 'Danger hero'),
+          React.createElement(Card, {tone:'pro'}, 'Pro hero')
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '3. Badge'),
+        React.createElement('div', {className:'row'},
+          React.createElement(Badge, {tone:'success', dot:true}, 'Jetzt lüften!'),
+          React.createElement(Badge, {tone:'warning', dot:true}, 'Fenster zu halten'),
+          React.createElement(Badge, {tone:'danger', dot:true}, 'Sehr hoch'),
+          React.createElement(Badge, {tone:'neutral'}, 'PRO')
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '4. Bottom Nav (in frame)'),
+        React.createElement('div', {className:'frame'},
+          React.createElement(BottomNav, {
+            items: [
+              {key:'heute', label:'Heute', icon:'wb_sunny'},
+              {key:'verlauf', label:'Verlauf', icon:'calendar_today'},
+              {key:'hund', label:'Hund', icon:'pets'},
+              {key:'profil', label:'Profil', icon:'tune'}
+            ],
+            activeKey: tab,
+            onChange: setTab
+          })
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '5. IconSquare'),
+        React.createElement('div', {className:'row'},
+          React.createElement(IconSquare, {icon:'wb_sunny', bg:'#fbecd6', fg:'#d98a2b', size:'lg'}),
+          React.createElement(IconSquare, {icon:'pets', bg:'#f7e6da', fg:'#c0673c', size:'md'}),
+          React.createElement(IconSquare, {icon:'filter_vintage', bg:'#eaf3e2', fg:'#6a9a3e', size:'sm'}),
+          React.createElement(IconSquare, {icon:'pest_control', bg:'#f2e7da', fg:'#a06a35', size:'xs'})
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '6. Button'),
+        React.createElement('div', {className:'row'},
+          React.createElement(Button, {variant:'primary'}, '7 Tage gratis testen'),
+          React.createElement(Button, {variant:'primaryAuth'}, 'Login'),
+          React.createElement(Button, {variant:'inverse'}, 'Pro testen'),
+          React.createElement(Button, {variant:'outline'}, 'Mit Google')
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '7. Bottom Sheet'),
+        React.createElement(Button, {variant:'primary', onClick:()=>setSheetOpen(true)}, 'Open sheet'),
+        React.createElement('div', {className:'frame', style:{marginTop:12}},
+          React.createElement(BottomSheet, {open: sheetOpen, onClose: ()=>setSheetOpen(false)},
+            React.createElement('div', null, 'Sheet content here')
+          )
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '8. Segmented Control'),
+        React.createElement('div', {className:'row'},
+          React.createElement(SegmentedControl, {variant:'thumb', value: seg1, onChange: setSeg1, options:[{value:'login',label:'Login'},{value:'register',label:'Registrieren'}]})
+        ),
+        React.createElement('div', {className:'row'},
+          React.createElement(SegmentedControl, {variant:'pill', value: seg2, onChange: setSeg2, options:[{value:'N',label:'N'},{value:'O',label:'O'},{value:'S',label:'S'},{value:'W',label:'W'}]})
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '9. FormInput'),
+        React.createElement('div', {className:'row', style:{width:300}},
+          React.createElement(FormInput, {icon:'mail', label:'E-Mail', hideLabel:true, placeholder:'E-Mail-Adresse'})
+        )
+      ),
+      React.createElement('div', {className:'section'},
+        React.createElement('h2', null, '10. Timeline Item'),
+        React.createElement(TimelineItem, {
+          icon:'wb_sunny', iconBg:'#fbecd6', iconFg:'#d98a2b',
+          title:'Hitze draußen halten', subtitle:'28° außen · 24° innen', time:'jetzt · 14:00',
+          status:'now', detail:'Außen wärmer als innen.', open: timelineOpen, onToggle: ()=>setTimelineOpen(!timelineOpen)
+        })
+      )
+    );
+  }
+
+  createRoot(document.getElementById('root')).render(React.createElement(Gallery));
+</script>
+</body>
+</html>

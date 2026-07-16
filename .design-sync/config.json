@@ -1,0 +1,13 @@
+{
+  "projectId": "27fabf35-985e-455c-b3a1-5b49c0a0e01a",
+  "shape": "package",
+  "pkg": "@airdog/design-system",
+  "globalName": "AirDogDS",
+  "buildCmd": "npm run build",
+  "cssEntry": "dist/ds-bundle.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "BottomSheet": { "cardMode": "single", "viewport": "390x420" },
+    "BottomNav": { "cardMode": "column" }
+  }
+}

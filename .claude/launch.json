@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8532"],
       "port": 8532
+    },
+    {
+      "name": "ds-demo",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8533"],
+      "port": 8533
     }
   ]
 }

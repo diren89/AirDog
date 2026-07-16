@@ -1,0 +1,25 @@
+{
+  "name": "@airdog/design-system",
+  "version": "0.1.0",
+  "description": "AirDog design system — extracted from the AirDog prototype (index.html, auth.html)",
+  "type": "module",
+  "main": "dist/ds-bundle.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.23.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.4"
+  }
+}

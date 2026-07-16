@@ -1,0 +1,16 @@
+@keyframes ds-fadein { from { opacity: 0 } to { opacity: 1 } }
+@keyframes ds-sheet { from { transform: translateY(100%) } to { transform: translateY(0) } }
+@keyframes ds-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(216,84,63,.30) }
+  50% { box-shadow: 0 0 0 7px rgba(216,84,63,0) }
+}
+
+.ds-sheet-overlay { animation: ds-fadein .2s ease; }
+.ds-sheet-panel { animation: ds-sheet .32s cubic-bezier(.2,.8,.2,1) both; }
+.ds-pulse { animation: ds-pulse 1.8s ease infinite; }
+
+.ds-input:focus { border-color: var(--ds-color-accent) !important; background: #fff !important; outline: none; }
+.ds-input::placeholder { color: var(--ds-color-placeholder); }
+.ds-scroll::-webkit-scrollbar { display: none; }
+.ds-scroll { scrollbar-width: none; }
+.ds-ms { font-family: var(--ds-icon-family); }
